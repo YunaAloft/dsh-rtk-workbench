@@ -1,0 +1,6 @@
+# Keep line endings stable across the five READMEs and the CI matrix.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.zip binary
+*.gz binary

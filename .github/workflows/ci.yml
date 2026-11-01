@@ -1,0 +1,85 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: unit (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-13, macos-14, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node node_modules/typescript/bin/tsc --noEmit
+      - run: node node_modules/vitest/vitest.mjs run
+      - run: node node_modules/tsdown/dist/run.mjs
+      - name: plugin checks
+        # Same invocation validated locally against dsh-plugin-guide@0.3.40 (exit 0 under --strict).
+        run: npx --yes --package dsh-plugin-guide@latest dsh-plugin-dev check --cwd . --strict
+
+  binary:
+    name: bundled binary (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x64
+            asset: rtk-x86_64-unknown-linux-musl.tar.gz
+            bin: rtk
+            out: rtk-bin
+          - os: macos-13
+            platform: darwin-x64
+            asset: rtk-x86_64-apple-darwin.tar.gz
+            bin: rtk
+            out: rtk-bin
+          - os: macos-14
+            platform: darwin-arm64
+            asset: rtk-aarch64-apple-darwin.tar.gz
+            bin: rtk
+            out: rtk-bin
+          - os: windows-latest
+            platform: win32-x64
+            asset: rtk-x86_64-pc-windows-msvc.zip
+            bin: rtk.exe
+            # Windows refuses to spawn a file with no extension, so the smoke
+            # binary keeps its `.exe` here.
+            out: rtk-bin.exe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # No `pnpm install`: scripts/smoke-rtk.mjs only uses Node built-ins, and
+      # skipping the install keeps this job fast and independent of the registry.
+      - name: fetch the bundled rtk for this platform
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').dshRtkVersion")
+          URL="https://github.com/rtk-ai/rtk/releases/download/v${VERSION}/${{ matrix.asset }}"
+          curl -fsSL -o asset "$URL"
+          mkdir -p extracted
+          tar -xf asset -C extracted
+          BIN=$(find extracted -name "${{ matrix.bin }}" -type f | head -1)
+          test -n "$BIN"
+          cp "$BIN" "${{ matrix.out }}"
+          chmod +x "${{ matrix.out }}"
+      - name: smoke the binary and the hook contract
+        run: node scripts/smoke-rtk.mjs ./${{ matrix.out }}

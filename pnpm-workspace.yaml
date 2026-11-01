@@ -1,0 +1,6 @@
+# pnpm 11 reads build-script approval from this file (not from package.json#pnpm).
+# The scaffold shipped the value as a literal placeholder — "set this to true or
+# false" — which makes every `pnpm run <script>` fail its pre-run dependency
+# check even though the script itself already succeeded.
+allowBuilds:
+  esbuild: true

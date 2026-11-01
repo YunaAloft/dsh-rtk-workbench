@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "RTK Workbench",
+    "description": "Cuts tool-output tokens before they reach the context: rewrite, compress, rtk built in."
+  }
+}
