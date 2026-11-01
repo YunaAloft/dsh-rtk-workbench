@@ -71,5 +71,13 @@
     "@deepseek-ai/schemastery": {
       "optional": true
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YunaAloft/dsh-rtk-workbench.git"
+  },
+  "homepage": "https://github.com/YunaAloft/dsh-rtk-workbench#readme",
+  "bugs": {
+    "url": "https://github.com/YunaAloft/dsh-rtk-workbench/issues"
   }
 }
