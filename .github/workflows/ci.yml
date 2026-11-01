@@ -16,7 +16,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-13, macos-14, windows-latest]
+        # `macos-13` and `macos-14` are gone/retired; the x64 macOS image is now
+        # `macos-15-intel`, and plain `macos-latest` is arm64.
+        os: [ubuntu-latest, macos-latest, macos-15-intel, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -44,12 +46,17 @@ jobs:
             asset: rtk-x86_64-unknown-linux-musl.tar.gz
             bin: rtk
             out: rtk-bin
-          - os: macos-13
+          - os: ubuntu-24.04-arm
+            platform: linux-arm64
+            asset: rtk-aarch64-unknown-linux-gnu.tar.gz
+            bin: rtk
+            out: rtk-bin
+          - os: macos-15-intel
             platform: darwin-x64
             asset: rtk-x86_64-apple-darwin.tar.gz
             bin: rtk
             out: rtk-bin
-          - os: macos-14
+          - os: macos-latest
             platform: darwin-arm64
             asset: rtk-aarch64-apple-darwin.tar.gz
             bin: rtk
@@ -76,7 +83,12 @@ jobs:
           URL="https://github.com/rtk-ai/rtk/releases/download/v${VERSION}/${{ matrix.asset }}"
           curl -fsSL -o asset "$URL"
           mkdir -p extracted
-          tar -xf asset -C extracted
+          # The Windows runner's `tar` is GNU tar, which cannot read zip, so the
+          # zip asset is unpacked with `unzip` (bundled with Git for Windows).
+          case "${{ matrix.asset }}" in
+            *.zip) unzip -q -o asset -d extracted ;;
+            *)     tar -xf asset -C extracted ;;
+          esac
           BIN=$(find extracted -name "${{ matrix.bin }}" -type f | head -1)
           test -n "$BIN"
           cp "$BIN" "${{ matrix.out }}"

@@ -12,10 +12,12 @@
  *   node scripts/release.mjs --yes --skip-npm   # only prepare GitHub assets
  *   node scripts/release.mjs --yes --registry https://registry.npmjs.org
  */
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+
+import { PLATFORMS, platformDependencies } from './platforms.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const DIST_NPM = join(ROOT, 'dist', 'npm')
@@ -30,7 +32,7 @@ const registry = registryIndex === -1 ? undefined : argv[registryIndex + 1]
 const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
 const version = manifest.version
 const rtkVersion = manifest.dshRtkVersion
-const platforms = Object.keys(manifest.optionalDependencies ?? {}).map((name) => (name.split('/').pop() ?? '').replace(/^rtk-/, ''))
+const platforms = PLATFORMS.map((platform) => platform.id)
 
 /** Run one command, inheriting stdio, and fail loudly. */
 function run(command, args, options = {}) {
@@ -57,8 +59,22 @@ if (skipNpm) {
     const tarball = join(DIST_NPM, `dsh-rtk-workbench-rtk-${platform}-${rtkVersion}.tgz`)
     publish(tarball, `@dsh-rtk-workbench/rtk-${platform}`)
   }
-  // Pack the main package last, after the platform packages exist on the registry.
-  const packed = spawnSync('pnpm', ['pack', '--silent'], { cwd: ROOT, encoding: 'utf8', shell: process.platform === 'win32' })
+  // Pack the main package last, after the platform packages exist on the
+  // registry. The repository's package.json carries no `optionalDependencies` —
+  // an unpublished name would make `pnpm install --frozen-lockfile` fail — so
+  // they are injected into the packed manifest only, then the file is restored.
+  const manifestPath = join(ROOT, 'package.json')
+  const original = readFileSync(manifestPath, 'utf8')
+  const packed = (() => {
+    try {
+      const withBins = JSON.parse(original)
+      withBins.optionalDependencies = platformDependencies(rtkVersion)
+      writeFileSync(manifestPath, `${JSON.stringify(withBins, null, 2)}\n`)
+      return spawnSync('pnpm', ['pack', '--silent'], { cwd: ROOT, encoding: 'utf8', shell: process.platform === 'win32' })
+    } finally {
+      writeFileSync(manifestPath, original)
+    }
+  })()
   if (packed.status !== 0) throw new Error(`pnpm pack failed: ${packed.stderr ?? ''}`)
   const name = packed.stdout.trim().split('\n').pop()
   if (name === undefined || name === '') throw new Error('pnpm pack printed no filename')

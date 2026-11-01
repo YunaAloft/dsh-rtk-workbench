@@ -20,6 +20,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const RTK_VERSION = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).dshRtkVersion ?? '1.1.0'
 const RELEASE = `https://github.com/rtk-ai/rtk/releases/download/v${RTK_VERSION}`
@@ -29,14 +30,7 @@ const PACKAGES = join(ROOT, 'packages')
 const DIST_NPM = join(ROOT, 'dist', 'npm')
 const DIST_GH = join(ROOT, 'dist', 'github')
 
-/** Every platform we publish a binary for. */
-const PLATFORMS = [
-  { id: 'win32-x64', os: 'win32', cpu: 'x64', asset: 'rtk-x86_64-pc-windows-msvc.zip', bin: 'rtk.exe' },
-  { id: 'darwin-x64', os: 'darwin', cpu: 'x64', asset: 'rtk-x86_64-apple-darwin.tar.gz', bin: 'rtk' },
-  { id: 'darwin-arm64', os: 'darwin', cpu: 'arm64', asset: 'rtk-aarch64-apple-darwin.tar.gz', bin: 'rtk' },
-  { id: 'linux-x64', os: 'linux', cpu: 'x64', asset: 'rtk-x86_64-unknown-linux-musl.tar.gz', bin: 'rtk' },
-  { id: 'linux-arm64', os: 'linux', cpu: 'arm64', asset: 'rtk-aarch64-unknown-linux-gnu.tar.gz', bin: 'rtk' },
-]
+import { PLATFORMS } from './platforms.mjs'
 
 const args = process.argv.slice(2)
 const only = args.includes('--only') ? args[args.indexOf('--only') + 1] : undefined

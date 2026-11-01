@@ -60,12 +60,5 @@
     "compression"
   ],
   "dshTarget": "0.2.1-rc.5",
-  "dshRtkVersion": "1.1.0",
-  "optionalDependencies": {
-    "@dsh-rtk-workbench/rtk-win32-x64": "1.1.0",
-    "@dsh-rtk-workbench/rtk-darwin-x64": "1.1.0",
-    "@dsh-rtk-workbench/rtk-darwin-arm64": "1.1.0",
-    "@dsh-rtk-workbench/rtk-linux-x64": "1.1.0",
-    "@dsh-rtk-workbench/rtk-linux-arm64": "1.1.0"
-  }
+  "dshRtkVersion": "1.1.0"
 }
