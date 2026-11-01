@@ -11,6 +11,7 @@
  *   node scripts/release.mjs --yes              # publish to npm
  *   node scripts/release.mjs --yes --skip-npm   # only prepare GitHub assets
  *   node scripts/release.mjs --yes --registry https://registry.npmjs.org
+ *   node scripts/release.mjs --yes --no-verify  # publish without polling the registry
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -80,6 +81,56 @@ if (skipNpm) {
   if (name === undefined || name === '') throw new Error('pnpm pack printed no filename')
   publish(join(ROOT, name), `dsh-rtk-workbench@${version}`)
 }
+
+// A successful `npm publish` does not mean the version is installable: a brand
+// new package is accepted with HTTP 202 and served as the placeholder
+// `0.0.0-stage` until its staged release is approved. Poll until every package
+// really serves the version, so a green script is not a green registry.
+const verifyDisabled = argv.includes('--no-verify')
+const verifyRegistry = registry ?? 'https://registry.npmjs.org'
+const VERIFY_TIMEOUT_MS = 15 * 60 * 1000
+const VERIFY_INTERVAL_MS = 20_000
+
+/** The version currently served as `latest` for one package, or undefined. */
+function liveVersion(pkg) {
+  const args = ['view', pkg, 'version', '--registry', verifyRegistry]
+  const result = spawnSync('npm', args, { encoding: 'utf8', shell: process.platform === 'win32' })
+  if (result.status !== 0) return undefined
+  const text = (result.stdout ?? '').trim()
+  return text === '' ? undefined : text
+}
+
+async function verifyPublication() {
+  const pending = new Set([...platforms.map((id) => platformPackageName(id)), 'dsh-rtk-workbench'])
+  const deadline = Date.now() + VERIFY_TIMEOUT_MS
+  console.log('')
+  console.log('verifying npm publication — new packages are staged for review, this can take a while')
+  for (;;) {
+    for (const pkg of [...pending]) {
+      const live = liveVersion(pkg)
+      if (live === version) {
+        pending.delete(pkg)
+        console.log(`  live     ${pkg} ${version}`)
+      } else if (live === '0.0.0-stage') {
+        console.log(`  staged   ${pkg} — awaiting approval`)
+      } else {
+        console.log(`  pending  ${pkg} — ${live ?? 'not found'}`)
+      }
+    }
+    if (pending.size === 0) {
+      console.log('all six packages are live on the registry')
+      return
+    }
+    if (Date.now() >= deadline) {
+      console.error(`still not live after 15 minutes: ${[...pending].join(', ')}`)
+      process.exitCode = 1
+      return
+    }
+    await new Promise((done) => setTimeout(done, VERIFY_INTERVAL_MS))
+  }
+}
+
+if (!skipNpm && !dryRun && !verifyDisabled) await verifyPublication()
 
 const githubAssets = existsSync(DIST_GH) ? readdirSync(DIST_GH).filter((file) => file.endsWith('.tgz') || file === 'checksums.txt' || file === 'manifest.json') : []
 console.log('')
