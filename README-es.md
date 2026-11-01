@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./docs/readme/header.svg" alt="dsh-rtk-workbench" width="900">
+  <img src="https://raw.githubusercontent.com/YunaAloft/dsh-rtk-workbench/main/docs/readme/header.svg" alt="dsh-rtk-workbench" width="900">
 </p>
 
 <p align="center">

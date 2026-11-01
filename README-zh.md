@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./docs/readme/header.svg" alt="dsh-rtk-workbench" width="900">
+  <img src="https://raw.githubusercontent.com/YunaAloft/dsh-rtk-workbench/main/docs/readme/header.svg" alt="dsh-rtk-workbench" width="900">
 </p>
 
 <p align="center">
@@ -222,6 +222,8 @@ node scripts/release.mjs --yes --registry https://registry.npmjs.org
 gh release create v0.1.0 dist/github/*.tgz dist/github/checksums.txt dist/github/manifest.json \
   --title "dsh-rtk-workbench v0.1.0 (rtk 1.1.0)" --generate-notes
 ```
+
+`release.mjs` 发布后会轮询 registry，直到六个包真的提供该版本：新包会先被 202 接收并暴露 `0.0.0-stage` 占位版，等暂存审核通过才可安装，所以「发布成功」不等于「已上架」。加 `--no-verify` 可跳过等待。
 
 顺序不能反：主包把平台包列为 `optionalDependencies`，先发主包会让所有安装解析不到二进制。平台包命名为 `dsh-rtk-workbench-<平台>`、版本与主包一致；内置的 rtk 版本记在 `dshRtkVersion` 字段。
 
