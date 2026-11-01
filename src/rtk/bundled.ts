@@ -35,9 +35,11 @@ function ensureExecutable(path: string, platform: string): string {
  *
  * Two layouts are checked, in order:
  *
- * 1. **Optional platform package** — `@dsh-rtk-workbench/rtk-<os>-<arch>`, the
+ * 1. **Optional platform package** — `dsh-rtk-workbench-<os>-<arch>`, the
  *    npm-distributed shape. `optionalDependencies` means a missing or failed
- *    download simply never resolves here.
+ *    download simply never resolves here. The scoped name below is the legacy
+ *    spelling and is still accepted, so an install that pinned an older release
+ *    keeps resolving.
  * 2. **Fat tarball** — `<package>/vendor/<os>-<arch>/rtk[.exe]`, the
  *    GitHub-Release shape where one tarball carries its own platform.
  *
@@ -52,9 +54,15 @@ export function bundledRtkPath(platform: string = process.platform, arch: string
 
   try {
     const require = createRequire(import.meta.url)
-    const manifest = require.resolve(`@dsh-rtk-workbench/rtk-${id}/package.json`)
-    const candidate = join(dirname(manifest), 'bin', name)
-    if (existsSync(candidate)) return ensureExecutable(candidate, platform)
+    for (const specifier of [`dsh-rtk-workbench-${id}/package.json`, `@dsh-rtk-workbench/rtk-${id}/package.json`]) {
+      try {
+        const manifest = require.resolve(specifier)
+        const candidate = join(dirname(manifest), 'bin', name)
+        if (existsSync(candidate)) return ensureExecutable(candidate, platform)
+      } catch {
+        /* try the next spelling */
+      }
+    }
   } catch {
     /* not installed for this platform */
   }

@@ -17,7 +17,7 @@ import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { PLATFORMS, platformDependencies } from './platforms.mjs'
+import { PLATFORMS, platformDependencies, platformPackageName } from './platforms.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const DIST_NPM = join(ROOT, 'dist', 'npm')
@@ -56,8 +56,8 @@ if (skipNpm) {
 } else {
   if (!existsSync(DIST_NPM)) throw new Error('dist/npm is missing; run `node scripts/build-vendor.mjs` first')
   for (const platform of platforms) {
-    const tarball = join(DIST_NPM, `dsh-rtk-workbench-rtk-${platform}-${rtkVersion}.tgz`)
-    publish(tarball, `@dsh-rtk-workbench/rtk-${platform}`)
+    const tarball = join(DIST_NPM, `${platformPackageName(platform)}-${version}.tgz`)
+    publish(tarball, platformPackageName(platform))
   }
   // Pack the main package last, after the platform packages exist on the
   // registry. The repository's package.json carries no `optionalDependencies` —
@@ -68,7 +68,7 @@ if (skipNpm) {
   const packed = (() => {
     try {
       const withBins = JSON.parse(original)
-      withBins.optionalDependencies = platformDependencies(rtkVersion)
+      withBins.optionalDependencies = platformDependencies(version)
       writeFileSync(manifestPath, `${JSON.stringify(withBins, null, 2)}\n`)
       return spawnSync('pnpm', ['pack', '--silent'], { cwd: ROOT, encoding: 'utf8', shell: process.platform === 'win32' })
     } finally {
@@ -88,9 +88,9 @@ for (const asset of githubAssets) console.log(`  ${asset}`)
 console.log('')
 console.log('Publish them with:')
 console.log(`  gh release create v${version} dist/github/*.tgz dist/github/checksums.txt dist/github/manifest.json \\`)
-console.log(`    --title "dsh-rtk-workbench v${version} (rtk ${rtkVersion})" --notes-file CHANGELOG.md`)
+console.log(`    --title "dsh-rtk-workbench v${version} (rtk ${rtkVersion})" --generate-notes`)
 console.log('')
 console.log('Users then install with either:')
 console.log(`  dsh plugin --profile <name> add dsh-rtk-workbench`)
-console.log(`  dsh plugin --profile <name> add https://github.com/<owner>/dsh-rtk-workbench/releases/download/v${version}/dsh-rtk-workbench-${version}-<platform>.tgz`)
+console.log(`  dsh plugin --profile <name> add https://github.com/<owner>/dsh-rtk-workbench/releases/latest/download/dsh-rtk-workbench-<platform>.tgz`)
 if (dryRun) console.log('\n(dry run — pass --yes to publish for real)')

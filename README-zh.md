@@ -223,7 +223,7 @@ gh release create v0.1.0 dist/github/*.tgz dist/github/checksums.txt dist/github
   --title "dsh-rtk-workbench v0.1.0 (rtk 1.1.0)" --generate-notes
 ```
 
-顺序不能反：主包把平台包列为 `optionalDependencies`，先发主包会让所有安装解析不到二进制。
+顺序不能反：主包把平台包列为 `optionalDependencies`，先发主包会让所有安装解析不到二进制。平台包命名为 `dsh-rtk-workbench-<平台>`、版本与主包一致；内置的 rtk 版本记在 `dshRtkVersion` 字段。
 
 ## Credits
 

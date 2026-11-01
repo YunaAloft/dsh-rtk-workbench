@@ -5,7 +5,7 @@
  * Produces, from a pinned rtk release:
  *   vendor/<platform>/<bin>                 extracted binaries (git-ignored)
  *   packages/rtk-<platform>/                one npm package per platform
- *   dist/npm/@dsh-rtk-workbench-rtk-*.tgz   those packages, packed
+ *   dist/npm/dsh-rtk-workbench-<platform>-<version>.tgz   those packages, packed
  *   dist/github/dsh-rtk-workbench-<v>-<platform>.tgz
  *                                           fat tarballs for GitHub Releases
  *
@@ -22,7 +22,11 @@ import { fileURLToPath } from 'node:url'
 
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const RTK_VERSION = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).dshRtkVersion ?? '1.1.0'
+const PLUGIN_MANIFEST = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+const RTK_VERSION = PLUGIN_MANIFEST.dshRtkVersion ?? '1.1.0'
+// Platform packages carry the plugin version, matching esbuild/rollup/swc: one
+// version to reason about, and a packaging fix can always be republished.
+const PLUGIN_VERSION = PLUGIN_MANIFEST.version
 const RELEASE = `https://github.com/rtk-ai/rtk/releases/download/v${RTK_VERSION}`
 const CACHE = join(ROOT, 'cache')
 const VENDOR = join(ROOT, 'vendor')
@@ -30,7 +34,7 @@ const PACKAGES = join(ROOT, 'packages')
 const DIST_NPM = join(ROOT, 'dist', 'npm')
 const DIST_GH = join(ROOT, 'dist', 'github')
 
-import { PLATFORMS } from './platforms.mjs'
+import { PLATFORMS, platformPackageName } from './platforms.mjs'
 
 const args = process.argv.slice(2)
 const only = args.includes('--only') ? args[args.indexOf('--only') + 1] : undefined
@@ -124,8 +128,8 @@ function writeSubPackage(platform, binary) {
   copyFileSync(binary, binPath)
   chmodSync(binPath, 0o755)
   const manifest = {
-    name: `@dsh-rtk-workbench/rtk-${platform.id}`,
-    version: RTK_VERSION,
+    name: platformPackageName(platform.id),
+    version: PLUGIN_VERSION,
     description: `Bundled rtk ${RTK_VERSION} binary for ${platform.os}-${platform.cpu}.`,
     license: 'Apache-2.0',
     os: [platform.os],
@@ -179,7 +183,6 @@ function packFatTarball(platform, vendorBinary) {
   mkdirSync(binDir, { recursive: true })
   copyFileSync(vendorBinary, join(binDir, platform.bin))
   chmodSync(join(binDir, platform.bin), 0o755)
-  manifest.version = `${manifest.version}-${platform.id}`
   // `lib/` is already built: a prepare script here would try to run tsdown in a
   // staging directory that has no node_modules.
   manifest.scripts = {}

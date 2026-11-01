@@ -17,9 +17,15 @@ export const PLATFORMS = [
   { id: 'linux-arm64', os: 'linux', cpu: 'arm64', asset: 'rtk-aarch64-unknown-linux-gnu.tar.gz', bin: 'rtk' },
 ]
 
-/** npm name of the package carrying one platform's binary. */
+/**
+ * npm name of the package carrying one platform's binary.
+ *
+ * Unscoped on purpose: a scope other than a username needs an npm organization,
+ * and `@username/...` would hide the package's association with this plugin.
+ * `dsh-rtk-workbench-win32-x64` spells out both, and needs no registry paperwork.
+ */
 export function platformPackageName(id) {
-  return `@dsh-rtk-workbench/rtk-${id}`
+  return `dsh-rtk-workbench-${id}`
 }
 
 /**

@@ -271,7 +271,9 @@ gh release create v0.1.0 dist/github/*.tgz dist/github/checksums.txt dist/github
 ```
 
 The order matters: the main package lists the platform packages as `optionalDependencies`, so
-publishing it first would make every install resolve zero binaries.
+publishing it first would make every install resolve zero binaries. The platform packages are named
+`dsh-rtk-workbench-<platform>` and carry the same version as the main package; the bundled rtk
+version lives in `dshRtkVersion`.
 
 ## Credits
 
