@@ -211,7 +211,9 @@ npx dsh-plugin-dev verify --cwd . \
   --headless @deepseek-ai/dsh-headless@0.2.1-rc.5
 ```
 
-`scripts/smoke-rtk.mjs <binary>` 用来验证某个平台的内置二进制能跑；CI 在 ubuntu、macOS（x64/arm64）与 Windows 上各跑一次，单测也是同样四个目标。
+`scripts/smoke-rtk.mjs <binary>` 用来验证某个平台的内置二进制能跑。CI 在**每个随包分发的平台**上各跑一次（Ubuntu x64/arm64、macOS arm64/x64、Windows），单测则在 Ubuntu、macOS arm64 与 Windows 上跑。
+
+推送 `.github/workflows/` 下的改动需要 token 带 `workflow` scope：先执行一次 `gh auth refresh -s workflow`，之后正常推送即可。
 
 **发布。** 先全量构建（`node scripts/build-vendor.mjs` 不带 `--only`），再按顺序发布五个平台包和主包：
 

@@ -254,8 +254,12 @@ npx dsh-plugin-dev verify --cwd . \
   --headless @deepseek-ai/dsh-headless@0.2.1-rc.5
 ```
 
-`scripts/smoke-rtk.mjs <binary>` proves a bundled binary runs on the current platform; CI runs it
-on ubuntu, macOS (x64/arm64) and Windows, together with the unit suite on the same four targets.
+`scripts/smoke-rtk.mjs <binary>` proves a bundled binary runs on the current platform. CI runs it on
+every platform we ship — Ubuntu x64/arm64, macOS arm64/x64 and Windows — while the unit suite runs on
+Ubuntu, macOS arm64 and Windows.
+
+Pushing a change under `.github/workflows/` needs the `workflow` token scope; run
+`gh auth refresh -s workflow` once and the next push goes through.
 
 **Releasing.** Build every platform (`node scripts/build-vendor.mjs` with no `--only`), then publish
 the five platform packages and the main package in that order:
