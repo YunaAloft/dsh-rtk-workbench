@@ -43,6 +43,19 @@ export function dialectOf(name: string): Dialect {
 }
 
 /**
+ * Whether a tool name looks like a shell, even if no config listed it.
+ *
+ * Used only as a fallback for `discoverShellTools`: a plugin that republishes a
+ * shell under a different name should still get rewrites, without the user
+ * having to name it twice.
+ *
+ * @param name - tool name at dispatch time.
+ */
+export function isShellLike(name: string): boolean {
+  return /(^|_)(bash|sh|zsh|shell|pwsh|powershell)$/.test(aliasBase(name))
+}
+
+/**
  * Whether a name matches a configured list, either literally or through its
  * official alias. `matchesList('ops_bash', ['bash'])` is true, which is what
  * makes the compatibility layer automatic without a second config surface.

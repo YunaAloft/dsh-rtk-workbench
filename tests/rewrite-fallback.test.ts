@@ -192,4 +192,33 @@ describe('rewrite fallback', () => {
     expect(timeouts).toHaveLength(1)
     layer.dispose()
   })
+
+  it('reuses a cached rewrite decision within the TTL', async () => {
+    const run = rewriteRunner('rtk ls -la')
+    const candidate = definition('bash', () => 'ok')
+    const layer = createRewriteLayer({
+      ctx: fakeCtx(candidate),
+      binary: 'rtk',
+      timeoutMs: 100,
+      env: {},
+      cacheTtlMs: 60_000,
+      run,
+    })
+    layer.ensurePatched('bash', undefined)
+    await invoke(candidate, { command: 'ls -la' })
+    await invoke(candidate, { command: 'ls -la' })
+    expect(run).toHaveBeenCalledTimes(1)
+    layer.dispose()
+  })
+
+  it('stops re-wrapping when another plugin keeps replacing execute', () => {
+    const candidate = definition('bash', () => 'ok')
+    const layer = createRewriteLayer({ ctx: fakeCtx(candidate), binary: 'rtk', timeoutMs: 100, env: {} })
+    for (let index = 0; index < 6; index += 1) {
+      candidate.execute = async () => 'foreign'
+      layer.ensurePatched('bash', undefined)
+    }
+    expect(layer.skippedList().get('bash')).toContain('stopped re-wrapping')
+    layer.dispose()
+  })
 })

@@ -86,8 +86,21 @@ export interface Config {
   pipelineMode: 'auto' | 'plugin-owned' | 'user'
   /** Prepend a `[rtk] ran: …` line so the model sees the executed command. */
   annotateRewrites: boolean
+  /**
+   * `short` names the bare rtk command (`rtk git status`); `full` includes the
+   * absolute binary path. Short is the default: the path costs ~130 characters
+   * per annotated result and the binary is already in `/rtk status`.
+   */
+  annotateStyle: 'short' | 'full'
   /** Body size below which the annotation is skipped (it would cost more than it explains). */
   annotateMinBytes: number
+  /**
+   * How long one `rtk rewrite` answer is reused. 0 disables the cache; the
+   * decision only depends on the command, the shell dialect and the cwd.
+   */
+  rewriteCacheTtlMs: number
+  /** Treat shell-like tool names as shells even when no config list names them. */
+  discoverShellTools: boolean
 }
 
 export const Config: Schema<Config> = Schema.object({
@@ -182,4 +195,13 @@ export const Config: Schema<Config> = Schema.object({
   annotateRewrites: Schema.boolean()
     .default(true)
     .description('Prepend `[rtk] ran: <command>` to the result so the executed command is visible.'),
+  annotateStyle: Schema.union(['short', 'full'])
+    .default('short')
+    .description('short names the bare rtk command; full includes the absolute binary path (~130 extra characters).'),
+  rewriteCacheTtlMs: Schema.number()
+    .default(600_000)
+    .description('Reuse one rtk rewrite answer for this many milliseconds; 0 disables the cache.'),
+  discoverShellTools: Schema.boolean()
+    .default(true)
+    .description('Treat shell-like tool names (bash/pwsh/shell suffixes) as shells even when unlisted.'),
 })

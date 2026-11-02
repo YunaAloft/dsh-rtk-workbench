@@ -31,6 +31,9 @@ function baseConfig(overrides: Partial<Config> = {}): Config {
     denyEnabled: false,
     pipelineMode: 'plugin-owned',
     annotateRewrites: true,
+    annotateStyle: 'short',
+    rewriteCacheTtlMs: 600000,
+    discoverShellTools: true,
     annotateMinBytes: 500,
     ...overrides,
   }

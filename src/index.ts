@@ -11,7 +11,7 @@ import { describeRun, resolveRtk, runRtk } from './rtk/exec'
 import { inspectPipeline, pipelineEnv, userPipelineCompresses } from './rtk/pipeline'
 import { spillOriginal } from './rtk/spill'
 import { createStats } from './stats'
-import { commandOf, decideTool } from './toolmap'
+import { commandOf, decideTool, isShellLike } from './toolmap'
 
 export const name = 'dsh-rtk-workbench'
 
@@ -242,6 +242,7 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
         // so elided text is gone for good. Say so once, with the usual cause.
         if (config.compressEnabled) await probeRecall()
         await settlePipeline()
+        registerAwareness()
       })
       .catch(() => {
         capability.state = 'fail'
@@ -267,12 +268,14 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
     // Windows + confined sandbox denies the wrapped command its own child
     // process, so a rewrite would only turn a working command into a failed one.
     allowRewrite: (exec) =>
+      config.rewriteEnabled &&
       !rewritesBlockedBySandbox({
         platform: process.platform,
         guard: config.rewriteSandboxGuard,
         mode: sandboxMode(ctx, exec),
       }),
     retryOnRtkFailure: config.rewriteFallback === 'retry',
+    cacheTtlMs: config.rewriteCacheTtlMs,
     onRtkFailure: (exec) => stats.recordError(exec, 'rtk'),
     onTimeout: (exec) => stats.recordError(exec, 'timeout'),
   })
@@ -328,8 +331,10 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
       const decision = decideTool(exec.name, config)
       // Patch on every dispatch: the definition may appear later, per-agent
       // restrictions mean the visible set differs by scope, and another plugin
-      // can replace `execute` underneath us.
-      if (decision.rewrite) rewrites.ensurePatched(exec.name, exec.agent)
+      // can replace `execute` underneath us. A shell-like name that no config
+      // list names is still worth patching when discovery is on.
+      const candidate = decision.rewrite || (config.discoverShellTools && isShellLike(exec.name))
+      if (candidate && config.rewriteEnabled) rewrites.ensurePatched(exec.name, exec.agent)
       if (capability.state === 'fail' && Date.now() - capability.probedAt > RECHECK_AFTER_MS) probeInBackground()
       if (config.denyEnabled) {
         const command = commandOf(exec.arguments)
@@ -355,8 +360,17 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
   ctx.on('tools/pre-execute', preExecute)
   ctx.on('tools/post-execute', postExecute)
 
-  if (config.awarenessEnabled) {
+  /**
+   * Add the rtk prompt section — but only once the probe has proven that rtk
+   * can actually compress. Telling the model "your output may be condensed"
+   * when the binary is unusable is worse than saying nothing.
+   */
+  let awarenessRegistered = false
+  function registerAwareness(): void {
+    if (!config.awarenessEnabled || awarenessRegistered) return
     whenService<SystemPromptLike>(ctx, 'systemPrompt', (systemPrompt) => {
+      if (awarenessRegistered) return
+      awarenessRegistered = true
       ctx.effect(() =>
         systemPrompt.section({
           name: AWARENESS_SECTION_NAME,

@@ -8,6 +8,7 @@ import {
   looksLikeRtkFailure,
   resultText,
   verbOf,
+  type RewriteOutcome,
 } from './rtk/rewrite'
 import { commandOf, dialectOf } from './toolmap'
 
@@ -15,6 +16,8 @@ import { commandOf, dialectOf } from './toolmap'
 export interface AppliedRewrite {
   readonly from: string
   readonly to: string
+  /** Bare `rtk …` proposal (without the resolved binary path), for short annotations. */
+  readonly proposal?: string
   /**
    * True when the rewritten command was abandoned and the original ran instead.
    * The annotator must say "fell back", never "ran", in that case.
@@ -49,6 +52,8 @@ export interface RewriteLayerOptions {
   readonly onRtkFailure?: (exec: ToolRunContext) => void
   /** Called once per rtk timeout, for session counters. */
   readonly onTimeout?: (exec: ToolRunContext) => void
+  /** How long one rewrite answer is reused; 0 disables the cache. */
+  readonly cacheTtlMs?: number
   /** Injectable runner, so unit tests can simulate rtk failures without a binary. */
   readonly run?: typeof runRtk
 }
@@ -61,6 +66,12 @@ interface PatchState {
 
 /** Serialised results above this size are never treated as an rtk-side failure. */
 const FAILURE_INSPECT_LIMIT = 8 * 1024
+
+/** Stop re-wrapping a definition after this many replacements by other plugins. */
+const MAX_REPATCHES = 3
+
+/** Cache bound: a session rarely sees more distinct shell commands than this. */
+const CACHE_LIMIT = 256
 
 /**
  * Rewrite layer: wrap `ToolDefinition.execute` in place so a shell call runs the
@@ -93,6 +104,11 @@ export function createRewriteLayer(options: RewriteLayerOptions) {
   const applied = new WeakMap<object, AppliedRewrite>()
   /** definition object → the wrapper currently installed on it. */
   const patches = new WeakMap<object, PatchState>()
+  /** name → how many times another plugin replaced our wrapper. */
+  const repatches = new Map<string, number>()
+  /** `cwd\0command` → cached decision (the answer is a pure function of both). */
+  const cache = new Map<string, { at: number; outcome: RewriteOutcome }>()
+  const cacheTtl = options.cacheTtlMs ?? 0
   const patchedNames = new Set<string>()
   const skipped = new Map<string, string>()
   const restores: Array<() => void> = []
@@ -113,6 +129,28 @@ export function createRewriteLayer(options: RewriteLayerOptions) {
   function isRtkFailure(result: unknown): boolean {
     const text = resultText(result)
     return text.length > 0 && text.length < FAILURE_INSPECT_LIMIT && looksLikeRtkFailure(text)
+  }
+
+  /** Cached `rtk rewrite` answer, or `undefined` when absent/expired. */
+  function readCache(key: string): RewriteOutcome | undefined {
+    if (cacheTtl <= 0) return undefined
+    const entry = cache.get(key)
+    if (entry === undefined) return undefined
+    if (Date.now() - entry.at > cacheTtl) {
+      cache.delete(key)
+      return undefined
+    }
+    return entry.outcome
+  }
+
+  /** Remember one answer for the TTL, evicting the oldest entry when full. */
+  function writeCache(key: string, outcome: RewriteOutcome): void {
+    if (cacheTtl <= 0) return
+    if (cache.size >= CACHE_LIMIT) {
+      const oldest = cache.keys().next().value
+      if (oldest !== undefined) cache.delete(oldest)
+    }
+    cache.set(key, { at: Date.now(), outcome })
   }
 
   /**
@@ -138,6 +176,17 @@ export function createRewriteLayer(options: RewriteLayerOptions) {
       return
     }
     if (state === undefined && skipped.has(name)) return
+    if (state !== undefined) {
+      // Another plugin replaced our wrapper. Re-wrapping is correct once, but a
+      // plugin that keeps doing it would nest wrappers without bound: stop and
+      // report instead of growing the call stack every dispatch.
+      const count = (repatches.get(name) ?? 0) + 1
+      repatches.set(name, count)
+      if (count > MAX_REPATCHES) {
+        skipped.set(name, 'execute keeps being replaced by another plugin; stopped re-wrapping')
+        return
+      }
+    }
 
     const original = definition.execute
     if (typeof original !== 'function') return
@@ -163,20 +212,27 @@ export function createRewriteLayer(options: RewriteLayerOptions) {
         return await original.call(owner, args, exec)
       }
       const cwd = options.cwdOf?.(exec)
-      const run = await runner(binary, ['rewrite', command], {
-        timeoutMs: options.timeoutOf?.() ?? timeoutMs,
-        signal: exec.signal,
-        env,
-        maxBytes: 64 * 1024,
-        ...(cwd === undefined ? {} : { cwd }),
-      })
-      if (run.failure?.kind === 'timeout') options.onTimeout?.(exec)
-      const outcome = decideRewrite(command, run.failure === undefined ? run : null)
+      const cacheKey = `${cwd ?? ''}\u0000${command}`
+      const cached = readCache(cacheKey)
+      if (cached !== undefined && cached.kind === 'none') return await original.call(owner, args, exec)
+      let outcome: RewriteOutcome | undefined = cached
+      if (outcome === undefined) {
+        const run = await runner(binary, ['rewrite', command], {
+          timeoutMs: options.timeoutOf?.() ?? timeoutMs,
+          signal: exec.signal,
+          env,
+          maxBytes: 64 * 1024,
+          ...(cwd === undefined ? {} : { cwd }),
+        })
+        if (run.failure?.kind === 'timeout') options.onTimeout?.(exec)
+        outcome = decideRewrite(command, run.failure === undefined ? run : null)
+        writeCache(cacheKey, outcome)
+      }
       if (outcome.kind !== 'rewrite') return await original.call(owner, args, exec)
       // rtk answers with a bare `rtk …`; a bundled-only install has no such PATH
       // entry, so run the binary this plugin resolved.
       const target = absolutizeRtk(outcome.command, binary, dialect)
-      applied.set(exec, { from: command, to: target })
+      applied.set(exec, { from: command, to: target, proposal: outcome.command })
       rewrites += 1
       let result: unknown
       try {
@@ -195,7 +251,7 @@ export function createRewriteLayer(options: RewriteLayerOptions) {
       learned.add(verb)
       fallbacks += 1
       options.onRtkFailure?.(exec)
-      applied.set(exec, { from: command, to: target, fallback: true })
+      applied.set(exec, { from: command, to: target, proposal: outcome.command, fallback: true })
       return await original.call(owner, args, exec)
     }
 

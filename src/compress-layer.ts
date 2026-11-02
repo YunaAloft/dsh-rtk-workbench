@@ -95,7 +95,9 @@ export function createCompressLayer(options: CompressLayerOptions) {
     exec: ToolExecution,
     result: Readonly<ToolExecutionResult>,
     content: Blocks,
-    rewrite: { readonly from: string; readonly to: string; readonly fallback?: boolean } | undefined,
+    rewrite:
+      | { readonly from: string; readonly to: string; readonly proposal?: string; readonly fallback?: boolean }
+      | undefined,
   ): Promise<Blocks | undefined> {
     // A PTC sub-call result reaches the program, not the model, unless the outer
     // run_code prints it; touching it would only cost a spawn.
@@ -174,9 +176,14 @@ export function createCompressLayer(options: CompressLayerOptions) {
       rewrite !== undefined &&
       (body === undefined || body.length >= config.annotateMinBytes)
     ) {
-      notes.push(
-        rewrite.fallback === true ? `[rtk] fell back: ${rewrite.from}` : `[rtk] ran: ${rewrite.to}`,
-      )
+      if (rewrite.fallback === true) {
+        notes.push(`[rtk] fell back: ${rewrite.from}`)
+      } else {
+        // Short style names the bare `rtk …` proposal; the absolute path costs
+        // ~130 characters per annotated result and is already in /rtk status.
+        const named = config.annotateStyle === 'full' ? rewrite.to : (rewrite.proposal ?? rewrite.to)
+        notes.push(`[rtk] ran: ${named}`)
+      }
     }
     // rtk's own note (converted Read output) travels first: the model must see
     // it before it considers the body authoritative.
@@ -212,7 +219,9 @@ export function createCompressLayer(options: CompressLayerOptions) {
       next: () => Promise<PostToolDecision>,
       rewriteOf: (
         exec: object,
-      ) => { readonly from: string; readonly to: string; readonly fallback?: boolean } | undefined,
+      ) =>
+        | { readonly from: string; readonly to: string; readonly proposal?: string; readonly fallback?: boolean }
+        | undefined,
     ): Promise<PostToolDecision> {
       const base = await next()
       try {

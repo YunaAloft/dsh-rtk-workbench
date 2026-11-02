@@ -10,6 +10,10 @@
  * When `tools/post-execute` replaces content the canonical value is preserved,
  * so the model sees this condensed view while `run_code` programs still get the
  * full value; the recall hint travels inside the condensed text itself.
+ *
+ * The section is only registered once the start-up probe has proven that rtk can
+ * compress at all — telling the model "output may be condensed" while the
+ * binary is unusable is worse than saying nothing.
  */
 export const AWARENESS_SECTION_NAME = 'rtk-workbench:output'
 
@@ -22,15 +26,16 @@ export function awarenessText(): string {
     'ANSI escapes, progress bars and repeated lines are removed, and very long output is capped.',
     'Treat condensed output as the complete result — do not re-run a command to see it unfiltered.',
     '',
-    'A truncated result states how to recover the original in its own text, usually',
-    '`rtk recall <hash>`. Some shell commands are also rewritten to `rtk <command>`; when that',
-    'happens the result starts with a `[rtk] ran: …` line naming the command that actually ran.',
+    'Some shell commands are rewritten to `rtk <command>`; the result then starts with `[rtk] ran:`.',
+    'If rtk itself could not run the rewrite, the result says `[rtk] fell back:` and the original ran.',
     '',
-    'If `rtk recall` fails with a store or schema error, your shell is sandboxed away from rtk’s',
-    'database: ask the user to run `/rtk recall <hash>` instead — slash commands run outside it.',
+    'A truncated result states how to recover the original in its own text: usually `rtk recall <hash>`,',
+    'sometimes a saved path you can read. If `rtk recall` fails with a store or schema error, your shell',
+    'is sandboxed away from rtk’s database — ask the user to run `/rtk recall <hash>` instead.',
     '',
-    'Only if a result is unusable — empty when output was clearly expected, contradicting its',
-    'exit code, or garbled — re-run it as `rtk bypass <your command>`.',
+    'The user can see what was saved with `/rtk status` (this session) or `/rtk gain` (rtk-wide).',
+    'Only if a result is unusable — empty when output was clearly expected, contradicting its exit code,',
+    'or garbled — re-run it as `rtk bypass <your command>`.',
   ].join('\n')
 }
 
