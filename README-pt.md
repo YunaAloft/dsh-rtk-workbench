@@ -13,7 +13,7 @@
 
 ## Why this exists
 
-O rtk reescreve comandos e comprime a saída das ferramentas antes de o modelo lê-la. Ele suporta 20 agentes; **o DeepSeek Harness não é um deles**. Os plugins existentes implementam apenas a reescrita — compressão de saída, seção de contexto e binário incluído são o que este plugin acrescenta.
+O rtk reescreve comandos e comprime a saída das ferramentas antes de o modelo lê-la. Ele traz seus próprios adaptadores para 20 agentes — para o Claude Code isso significa instalar um hook `PreToolUse` na configuração dele, e os outros 19 funcionam do mesmo jeito. **O DeepSeek Harness não tinha nenhum desses adaptadores; este plugin é o que faltava**. Os plugins existentes implementam apenas a reescrita — compressão de saída, seção de contexto e binário incluído são o que este plugin acrescenta.
 
 ## What you get
 
@@ -63,7 +63,7 @@ Se `/rtk status` disser `rtk is not usable`, a linha indica o motivo (`spawn`, `
 
 ## Credits
 
-As regras de compressão e o protocolo `hook` são trabalho do [rtk](https://github.com/rtk-ai/rtk) (Apache-2.0); este plugin é o adaptador para o DeepSeek Harness e distribui o rtk 1.1.0 sem modificações.
+As regras de compressão e o protocolo `hook` são trabalho do [rtk](https://github.com/rtk-ai/rtk); este plugin é o adaptador para o DeepSeek Harness e distribui o binário do rtk sem modificações. Esse binário é Apache-2.0 e liga o `rtk-engine` sob BUSL-1.1 (source-available; o uso em produção é gratuito e a licença vira Apache-2.0 em 2030-09-09, mas não permite oferecer o rtk como produto ou serviço pago). Os dois textos acompanham o pacote em [`licenses/`](./licenses).
 
 ## License
 

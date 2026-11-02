@@ -20,8 +20,10 @@
 ## Why this exists
 
 rtk works by sitting between the agent and its tools: it rewrites a command into a filtered
-variant, and it compresses tool output before the model reads it. It supports 20 agents out of
-the box. **DeepSeek Harness is not one of them.**
+variant, and it compresses tool output before the model reads it. It ships its own adapters for
+20 agents — for Claude Code that means writing a `PreToolUse` hook into its config, and the other
+19 work the same way. **DeepSeek Harness had none of those adapters; this plugin is the missing
+one.**
 
 The existing DSH plugins close that gap only halfway — they all implement *command rewriting*
 and stop there. That leaves two thirds of rtk's value unused:
@@ -282,8 +284,11 @@ version lives in `dshRtkVersion`.
 ## Credits
 
 The compression rules, filters and the `hook` protocol are [rtk](https://github.com/rtk-ai/rtk)'s
-work (Apache-2.0); this plugin is the DeepSeek Harness adapter and ships rtk 1.1.0 unmodified.
-Its license is reproduced in [`licenses/rtk-LICENSE`](./licenses/rtk-LICENSE).
+work; this plugin is the DeepSeek Harness adapter and ships the unmodified rtk binary. That binary
+is Apache-2.0 and links `rtk-engine` under BUSL-1.1: source-available, with an additional use grant
+that makes production use free and that turns into Apache-2.0 on 2030-09-09, but which does not
+permit offering rtk itself as a paid or hosted product. Both texts ship in [`licenses/`](./licenses),
+with a one-page map of what covers what.
 
 ## License
 

@@ -19,7 +19,7 @@
 
 ## Why this exists
 
-rtk 的定位是站在 agent 和工具之间：把命令改写成过滤版，并在模型读到工具输出之前先压一遍。它开箱支持 20 个 agent——**DeepSeek Harness 不在其中**。
+rtk 的定位是站在 agent 和工具之间：把命令改写成过滤版，并在模型读到工具输出之前先压一遍。它为 20 个 agent 各自实现了适配层——对 Claude Code 就是往它的配置里装一个 `PreToolUse` hook，另外 19 个同理。**DeepSeek Harness 此前没有这样的适配层，本插件补上的正是这一环。**
 
 现有的 DSH 插件只补了一半：全部实现的是*命令改写*，到这就停了，于是 rtk 另外三分之二的价值被浪费：
 
@@ -229,7 +229,7 @@ gh release create v0.1.0 dist/github/*.tgz dist/github/checksums.txt dist/github
 
 ## Credits
 
-压缩规则、过滤器与 `hook` 协议都是 [rtk](https://github.com/rtk-ai/rtk) 的工作（Apache-2.0）；本插件是 DeepSeek Harness 侧的适配层，原样分发 rtk 1.1.0。其许可证副本见 [`licenses/rtk-LICENSE`](./licenses/rtk-LICENSE)。
+压缩规则、过滤器与 `hook` 协议都是 [rtk](https://github.com/rtk-ai/rtk) 的工作；本插件是 DeepSeek Harness 侧的适配层，原样分发 rtk 二进制。该二进制本体是 Apache-2.0，并链接了以 BUSL-1.1 授权的 `rtk-engine`：source-available，其附加授权允许免费生产使用，2030-09-09 起自动转为 Apache-2.0，但不允许把 rtk 本身作为付费或托管产品对外提供。两份许可文本都随包分发，见 [`licenses/`](./licenses)（附一页说明，写明哪份覆盖哪部分）。
 
 ## License
 
