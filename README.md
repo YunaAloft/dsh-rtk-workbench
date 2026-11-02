@@ -272,9 +272,9 @@ gh release create v0.1.0 dist/github/*.tgz dist/github/checksums.txt dist/github
   --title "dsh-rtk-workbench v0.1.0 (rtk 1.1.0)" --generate-notes
 ```
 
-`release.mjs` then polls the registry until all six packages really serve the version: a new package
-is accepted with HTTP 202 and served as `0.0.0-stage` until its staged release is approved, so a
-successful publish is not yet an installable one. Skip the wait with `--no-verify`.
+`release.mjs` then prints a one-shot registry snapshot: a new package is accepted with HTTP 202 and
+served as `0.0.0-stage` until its staged release is approved, so a successful publish is not yet an
+installable one. Add `--verify` to wait for the staged releases instead of reading the snapshot.
 
 The order matters: the main package lists the platform packages as `optionalDependencies`, so
 publishing it first would make every install resolve zero binaries. The platform packages are named

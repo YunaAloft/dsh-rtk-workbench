@@ -230,6 +230,14 @@ function packFatTarball(platform, vendorBinary) {
 }
 
 mkdirSync(VENDOR, { recursive: true })
+// A full build owns both output directories: leftovers from an older version
+// (a previous 0.1.0 sub-package, say) would otherwise sit next to the new ones
+// and invite publishing the wrong file. `--only` runs leave them alone, because
+// they are deliberately partial.
+if (only === undefined) {
+  rmSync(DIST_NPM, { recursive: true, force: true })
+  rmSync(DIST_GH, { recursive: true, force: true })
+}
 mkdirSync(DIST_NPM, { recursive: true })
 mkdirSync(DIST_GH, { recursive: true })
 

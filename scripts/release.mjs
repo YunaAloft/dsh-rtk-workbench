@@ -11,7 +11,8 @@
  *   node scripts/release.mjs --yes              # publish to npm
  *   node scripts/release.mjs --yes --skip-npm   # only prepare GitHub assets
  *   node scripts/release.mjs --yes --registry https://registry.npmjs.org
- *   node scripts/release.mjs --yes --no-verify  # publish without polling the registry
+ *   node scripts/release.mjs --yes --verify     # also wait for the staged releases to go live
+ *   node scripts/release.mjs --yes --no-verify  # publish without even a status snapshot
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -84,9 +85,10 @@ if (skipNpm) {
 
 // A successful `npm publish` does not mean the version is installable: a brand
 // new package is accepted with HTTP 202 and served as the placeholder
-// `0.0.0-stage` until its staged release is approved. Poll until every package
-// really serves the version, so a green script is not a green registry.
-const verifyDisabled = argv.includes('--no-verify')
+// `0.0.0-stage` until its staged release is approved. The default is a single
+// snapshot of the registry, because publishing should not block for minutes on
+// something the user can check later; `--verify` turns it into a polling loop.
+const verifyMode = argv.includes('--verify') ? 'poll' : argv.includes('--no-verify') ? 'skip' : 'snapshot'
 const verifyRegistry = registry ?? 'https://registry.npmjs.org'
 const VERIFY_TIMEOUT_MS = 15 * 60 * 1000
 const VERIFY_INTERVAL_MS = 20_000
@@ -100,11 +102,17 @@ function liveVersion(pkg) {
   return text === '' ? undefined : text
 }
 
-async function verifyPublication() {
+/**
+ * Report what the registry serves right now; with `poll`, keep asking until
+ * every package serves the version or the deadline passes.
+ *
+ * @param poll - wait for the staged releases instead of taking one snapshot.
+ */
+async function reportPublication(poll) {
   const pending = new Set([...platforms.map((id) => platformPackageName(id)), 'dsh-rtk-workbench'])
   const deadline = Date.now() + VERIFY_TIMEOUT_MS
   console.log('')
-  console.log('verifying npm publication — new packages are staged for review, this can take a while')
+  console.log(poll ? 'waiting for the registry to serve the new version…' : 'registry snapshot:')
   for (;;) {
     for (const pkg of [...pending]) {
       const live = liveVersion(pkg)
@@ -121,6 +129,10 @@ async function verifyPublication() {
       console.log('all six packages are live on the registry')
       return
     }
+    if (!poll) {
+      console.log('not live yet; re-check with `npm view <package> version --registry ' + verifyRegistry + '`')
+      return
+    }
     if (Date.now() >= deadline) {
       console.error(`still not live after 15 minutes: ${[...pending].join(', ')}`)
       process.exitCode = 1
@@ -130,7 +142,7 @@ async function verifyPublication() {
   }
 }
 
-if (!skipNpm && !dryRun && !verifyDisabled) await verifyPublication()
+if (!skipNpm && !dryRun && verifyMode !== 'skip') await reportPublication(verifyMode === 'poll')
 
 const githubAssets = existsSync(DIST_GH) ? readdirSync(DIST_GH).filter((file) => file.endsWith('.tgz') || file === 'checksums.txt' || file === 'manifest.json') : []
 console.log('')
