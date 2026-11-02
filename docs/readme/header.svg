@@ -14,5 +14,5 @@
   <text x="48" y="86" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="44" font-weight="700" fill="#f8fafc">dsh-rtk-workbench</text>
   <text x="48" y="122" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="19" fill="#cbd5e1">rewrite · compress · explain — rtk for DeepSeek Harness</text>
   <rect x="48" y="146" width="150" height="4" rx="2" fill="url(#accent)"/>
-  <text x="852" y="180" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#64748b">bundled rtk 1.1.0 · fail-open by design</text>
+  <text x="852" y="180" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#64748b">by YunaAloft</text>
 </svg>
