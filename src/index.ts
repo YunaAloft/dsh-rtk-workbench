@@ -8,7 +8,7 @@ import type { Config as ConfigShape } from './config'
 import { createRewriteLayer } from './rewrite-layer'
 import { callCwd, coldStartTimeout, rewritesBlockedBySandbox, sandboxMode } from './runtime'
 import { describeRun, resolveRtk, runRtk } from './rtk/exec'
-import { pipelineEnv } from './rtk/pipeline'
+import { inspectPipeline, pipelineEnv, userPipelineCompresses } from './rtk/pipeline'
 import { spillOriginal } from './rtk/spill'
 import { commandOf, decideTool } from './toolmap'
 
@@ -122,6 +122,18 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
   // rewriting the loader config (which is static after load).
   const config: ConfigShape = { ...rawConfig }
   const { env, configDir } = pipelineEnv(config.pipelineMode)
+  /**
+   * Live pipeline state. `mode` starts as what the config asked for, then `auto`
+   * may flip it to `user` once the probe proves the user's pipeline compresses;
+   * `health` is filled by the same probe.
+   */
+  const pipeline = {
+    mode: (config.pipelineMode === 'user' ? 'user' : 'plugin-owned') as 'plugin-owned' | 'user',
+    dir: configDir,
+    health: 'unknown' as 'unknown' | 'ok' | 'problems',
+    detail: undefined as string | undefined,
+    trust: [] as string[],
+  }
   const resolution = resolveRtk({ rtkPath: config.rtkPath, rtkSource: config.rtkSource }, env)
   const binary = resolution.binary
 
@@ -144,6 +156,60 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
   }
 
   /**
+   * Recall-store probe: a broken store does not stop compression, but it
+   * silently removes the recovery path (rtk then omits its recall hint), so it
+   * is worth one warning with the usual cause.
+   */
+  async function probeRecall(): Promise<void> {
+    const budget = Math.max(config.timeoutMs, config.coldStartTimeoutMs)
+    const probe = await runRtk(binary, ['recall', '--list'], { timeoutMs: budget, env, maxBytes: 64 * 1024 })
+    if (probe.failure === undefined && probe.code === 0) {
+      capability.recall = 'ok'
+      return
+    }
+    capability.recall = 'fail'
+    logger.warn?.(
+      `[rtk-workbench] recall store unavailable (${describeRun(probe)}); compressed output will not be recoverable. ` +
+        'This usually means the directory holding the binary refuses writes (a read-only mount or a restrictive ACL): ' +
+        'install the platform tarball into the profile, or point `rtkPath` at an rtk outside that directory.',
+    )
+  }
+
+  /**
+   * Resolve `auto` and record the injected pipeline's health.
+   *
+   * A pipeline file that fails to resolve makes rtk fall back to `rtk:default`,
+   * which has no `after_tool` rules: compression disappears while every switch
+   * still says "on". That state must be visible, never silent.
+   */
+  async function settlePipeline(): Promise<void> {
+    const budget = Math.max(config.timeoutMs, config.coldStartTimeoutMs)
+    try {
+      if (config.pipelineMode === 'auto') {
+        const userCompresses = await userPipelineCompresses(binary, { env, timeoutMs: budget })
+        if (userCompresses) {
+          // `auto` starts from a fresh object (pipelineEnv copies the base env),
+          // so dropping the override here is safe and affects every later spawn.
+          delete env.RTK_CONFIG_DIR
+          pipeline.mode = 'user'
+          pipeline.dir = ''
+        }
+      }
+      const health = await inspectPipeline(binary, { env, timeoutMs: budget })
+      pipeline.health = health.ok ? 'ok' : 'problems'
+      pipeline.detail = health.detail
+      pipeline.trust = [...health.untrusted]
+      if (!health.ok) {
+        logger.warn?.(`[rtk-workbench] the injected pipeline is not active: ${health.detail ?? 'unknown reason'}`)
+      } else if (pipeline.mode === 'user') {
+        logger.info?.('[rtk-workbench] auto mode: using the user rtk pipeline (it already compresses)')
+      }
+    } catch {
+      /* diagnostics must never break tool execution */
+    }
+  }
+
+  /**
    * Probe the binary in the background.
    *
    * The first spawn in a fresh host process can take seconds (measured 2.7–5.8 s),
@@ -155,7 +221,7 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
     const budget = Math.max(config.timeoutMs, config.coldStartTimeoutMs)
     const started = Date.now()
     void runRtk(binary, ['--version'], { timeoutMs: budget, env })
-      .then((run) => {
+      .then(async (run) => {
         if (run.failure !== undefined || run.code !== 0) {
           capability.state = 'fail'
           capability.detail = describeRun(run)
@@ -173,19 +239,8 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
         // A broken recall store does not stop compression, but it silently removes
         // the recovery path: rtk then omits its `[full output: rtk recall …]` hint,
         // so elided text is gone for good. Say so once, with the usual cause.
-        if (!config.compressEnabled) return
-        return runRtk(binary, ['recall', '--list'], { timeoutMs: budget, env, maxBytes: 64 * 1024 }).then((probe) => {
-          if (probe.failure === undefined && probe.code === 0) {
-            capability.recall = 'ok'
-            return
-          }
-          capability.recall = 'fail'
-          logger.warn?.(
-            `[rtk-workbench] recall store unavailable (${describeRun(probe)}); compressed output will not be recoverable. ` +
-              'This usually means the directory holding the binary refuses writes (a read-only mount or a restrictive ACL): ' +
-              'install the platform tarball into the profile, or point `rtkPath` at an rtk outside that directory.',
-          )
-        })
+        if (config.compressEnabled) await probeRecall()
+        await settlePipeline()
       })
       .catch(() => {
         capability.state = 'fail'
@@ -313,8 +368,13 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
       config,
       binary,
       binarySource: resolution.source,
-      pipelineMode: config.pipelineMode,
-      pipelineDir: configDir,
+      pipeline: () => ({
+        mode: pipeline.mode,
+        dir: pipeline.dir,
+        health: pipeline.health,
+        ...(pipeline.detail === undefined ? {} : { detail: pipeline.detail }),
+        trust: pipeline.trust,
+      }),
       env,
       timeoutMs: config.timeoutMs,
       patched: () => rewrites.patchedList(),

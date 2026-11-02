@@ -79,11 +79,11 @@ export interface Config {
   /** Honour rtk's `deny` verdict from the PreToolUse bridge. Default off. */
   denyEnabled: boolean
   /**
-   * `plugin-owned` ships its own pipeline (through `RTK_CONFIG_DIR`) so the
-   * user's global rtk config stays untouched; `user` relies on a pipeline the
-   * user installed themselves.
+   * `auto` keeps the plugin-owned pipeline unless the user's own rtk pipeline
+   * already compresses (then it is respected); `plugin-owned` always injects
+   * through `RTK_CONFIG_DIR`; `user` never injects.
    */
-  pipelineMode: 'plugin-owned' | 'user'
+  pipelineMode: 'auto' | 'plugin-owned' | 'user'
   /** Prepend a `[rtk] ran: …` line so the model sees the executed command. */
   annotateRewrites: boolean
   /** Body size below which the annotation is skipped (it would cost more than it explains). */
@@ -169,9 +169,11 @@ export const Config: Schema<Config> = Schema.object({
     .description('Skip spilling texts larger than this many bytes.'),
   awarenessEnabled: Schema.boolean().default(true).description('Inject the rtk awareness section into the system prompt.'),
   denyEnabled: Schema.boolean().default(false).description("Honour rtk's deny verdict. Off by default: cc-safety-net already covers command blocking."),
-  pipelineMode: Schema.union(['plugin-owned', 'user'])
-    .default('plugin-owned')
-    .description('plugin-owned ships its own pipeline through RTK_CONFIG_DIR; user relies on a pipeline you installed.'),
+  pipelineMode: Schema.union(['auto', 'plugin-owned', 'user'])
+    .default('auto')
+    .description(
+      'auto respects an existing user pipeline and otherwise injects the plugin pipeline; plugin-owned always injects; user never injects.',
+    ),
   annotateMinBytes: Schema.number()
     .default(500)
     .description(

@@ -26,8 +26,14 @@ export interface CommandContext {
   readonly config: Config
   readonly binary: string
   readonly binarySource: string
-  readonly pipelineMode: string
-  readonly pipelineDir: string
+  /** Live pipeline state: which pipeline runs, where it lives, and its health. */
+  readonly pipeline: () => {
+    readonly mode: 'plugin-owned' | 'user'
+    readonly dir: string
+    readonly health: 'unknown' | 'ok' | 'problems'
+    readonly detail?: string
+    readonly trust: readonly string[]
+  }
   readonly env: NodeJS.ProcessEnv
   readonly timeoutMs: number
   readonly patched: () => readonly string[]
@@ -94,18 +100,26 @@ export function createCommandHandler(context: CommandContext) {
 
   async function status(): Promise<CommandOutcome> {
     const probe = context.capability()
+    const pipeline = context.pipeline()
+    const pipelineLine =
+      pipeline.health === 'unknown'
+        ? 'checking…'
+        : pipeline.health === 'ok'
+          ? 'ok'
+          : `problems — ${pipeline.detail ?? 'see /rtk doctor'}`
     const lines = [
       `binary     : ${binary}  (${context.binarySource})`,
       `probe      : ${probe.state}${probe.detail === '' ? '' : ` — ${probe.detail}`}`,
       `version    : ${await version()}`,
       `recall     : ${await recallState()}`,
-      `pipeline   : ${context.pipelineMode}${context.pipelineDir === '' ? '' : ` (${context.pipelineDir})`}`,
+      `pipeline   : ${pipeline.mode}${pipeline.dir === '' ? '' : ` (${pipeline.dir})`}  ${pipelineLine}`,
       `rewrite    : ${flag(config.rewriteEnabled)}   tools: ${config.rewriteTools.join(', ')}`,
       `compress   : ${flag(config.compressEnabled)}   threshold: ${String(config.compressThresholdBytes)} B`,
       `awareness  : ${flag(config.awarenessEnabled)}   section: ${AWARENESS_SECTION_NAME}`,
       `deny       : ${flag(config.denyEnabled)}`,
       `patched    : ${context.patched().join(', ') || '(none yet)'}`,
     ]
+    for (const line of pipeline.trust.slice(0, 2)) lines.push(`  trust      : ${line}`)
     const skipped = [...context.skipped().entries()]
     if (skipped.length > 0) {
       lines.push('skipped    :')
@@ -168,6 +182,39 @@ export function createCommandHandler(context: CommandContext) {
       `pipeline   : ${pipelineRun.failure === undefined && pipelineRun.code === 0 ? 'rtk:posthook available' : describeRun(pipelineRun)}`,
     )
 
+    // The three commands rtk ships for diagnosing the *injected* pipeline: a
+    // file that fails to resolve silently falls back to `rtk:default`, which
+    // removes compression without changing a single switch in this plugin.
+    const firstLine = (text: string): string => text.trim().split('\n')[0]?.slice(0, 160) ?? ''
+    const showRun = await runRtk(binary, ['pipeline', 'show'], { timeoutMs: budget, env: context.env, maxBytes: 64 * 1024 })
+    lines.push(
+      `show       : ${showRun.failure === undefined && showRun.code === 0 ? firstLine(showRun.stdout) : describeRun(showRun)}`,
+    )
+    const validateRun = await runRtk(binary, ['pipeline', 'validate'], {
+      timeoutMs: budget,
+      env: context.env,
+      maxBytes: 16 * 1024,
+    })
+    lines.push(
+      `validate   : ${validateRun.failure === undefined && validateRun.code === 0 ? 'ok' : firstLine(validateRun.stderr || validateRun.stdout) || describeRun(validateRun)}`,
+    )
+    const statusRun = await runRtk(binary, ['pipeline', 'status'], {
+      timeoutMs: budget,
+      env: context.env,
+      maxBytes: 16 * 1024,
+    })
+    lines.push(
+      `pl status  : ${statusRun.failure === undefined && statusRun.code === 0 ? 'ok' : firstLine(statusRun.stdout || statusRun.stderr)}`,
+    )
+    const methodsRun = await runRtk(binary, ['methods', 'list'], { timeoutMs: budget, env: context.env, maxBytes: 16 * 1024 })
+    lines.push(
+      `methods    : ${methodsRun.failure === undefined && methodsRun.code === 0 ? `${String(methodsRun.stdout.split('\n').length - 1)} listed` : describeRun(methodsRun)}`,
+    )
+    const trustRun = await runRtk(binary, ['trust', '--list'], { timeoutMs: budget, env: context.env, maxBytes: 16 * 1024 })
+    lines.push(
+      `trust      : ${trustRun.failure === undefined && trustRun.code === 0 ? firstLine(trustRun.stdout) || 'none' : describeRun(trustRun)}`,
+    )
+
     const sample = 'PASS test_0 ok\n'.repeat(200)
     const payload = JSON.stringify({
       hook_event_name: 'PostToolUse',
@@ -204,7 +251,7 @@ export function createCommandHandler(context: CommandContext) {
         : ''
       lines.push(`recall     : ${reason}${note}`)
     }
-    lines.push(`profile    : ${context.pipelineMode}${context.pipelineDir === '' ? '' : ` (${context.pipelineDir})`}`)
+    lines.push(`profile    : ${context.pipeline().mode}${context.pipeline().dir === '' ? '' : ` (${context.pipeline().dir})`}`)
     lines.push(`patched    : ${context.patched().join(', ') || '(none yet)'}`)
     return { kind: 'success', text: lines.join('\n') }
   }
