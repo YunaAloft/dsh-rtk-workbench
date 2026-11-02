@@ -200,7 +200,7 @@ function packFatTarball(platform, vendorBinary) {
   rmSync(stage, { recursive: true, force: true })
   mkdirSync(stage, { recursive: true })
   const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
-  for (const entry of ['lib', 'locale', 'cordis.patch.yml', 'icon.svg', 'README.md', 'README-zh.md', 'README-es.md', 'README-hi.md', 'README-pt.md', 'LICENSE', 'licenses']) {
+  for (const entry of ['lib', 'locale', 'cordis.patch.yml', 'icon.svg', 'README.md', 'README-zh.md', 'LICENSE', 'licenses']) {
     const source = join(ROOT, entry)
     if (!existsSync(source)) continue
     if (statSync(source).isDirectory()) {

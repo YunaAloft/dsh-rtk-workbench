@@ -4,7 +4,7 @@ import Schema from '@deepseek-ai/schemastery'
  * Plugin configuration. Every tunable lives here (never hardcoded): the
  * harness validates this Schema at load time and fails loud on invalid
  * values, and each key can be overridden from `cordis.patch.yml` without
- * editing code (dsh-plugin-guide contract §3.6).
+ * editing code.
  *
  * Defaults come from the M0 measurements in `memos/plans/m0-findings.md`:
  * one `rtk hook claude` call costs p50 ≈ 96 ms and one `rtk rewrite` p50 ≈

@@ -57,7 +57,7 @@ export interface CommandContext {
   readonly capability: () => { readonly state: 'unknown' | 'ok' | 'fail'; readonly detail: string }
 }
 
-const HELP = [
+export const HELP = [
   'rtk-workbench — /rtk <subcommand>',
   '  status         binary, pipeline, switches, session savings',
   '  stats [--json] full session report',
@@ -67,7 +67,48 @@ const HELP = [
   '  gain           forward to `rtk gain` (rtk-wide totals, not this session)',
   '  recall <hash>  restore output rtk elided',
   '  on|off <rewrite|compress>   toggle a switch for this session',
+  '  help [topic]   this list, or one topic: pipeline, sandbox, recovery, config',
 ].join('\n')
+
+/**
+ * Short topic texts for `/rtk help <topic>`.
+ *
+ * The long-form manual lives in `docs/reference.md`; this map is the same
+ * information in the place a terminal user can actually reach, and the test
+ * suite checks the two stay in sync.
+ */
+export const HELP_TOPICS: Readonly<Record<string, string>> = {
+  pipeline: [
+    'pipeline — which rtk pipeline is active',
+    '  auto (default): keep the plugin-owned pipeline unless the user pipeline already compresses.',
+    '  plugin-owned: inject <DSH_HOME>/rtk-workbench/pipeline/pipeline.toml via RTK_CONFIG_DIR.',
+    '  user: never inject; your own pipeline must extend rtk:posthook for compression.',
+    '  A pipeline that fails to load silently falls back to rtk:default (no after_tool rules),',
+    '  which removes compression while every switch still reads on. /rtk status shows it and',
+    '  /rtk doctor runs pipeline show / validate / status.',
+  ].join('\n'),
+  sandbox: [
+    'sandbox — what a confined session changes',
+    '  Windows + workspace-write/read-only: the host denies rtk the right to spawn the real',
+    '  command, so rewrites are skipped (compression still works). rewriteSandboxGuard: off forces.',
+    '  Any sandbox: the model shell can read files but cannot write rtk recall store, so the',
+    '  plugin spills the original text when it compresses (spillOriginal: auto).',
+  ].join('\n'),
+  recovery: [
+    'recovery — getting the original back',
+    '  1. rtk recall <hash> from a result that shows the hint (the user can run /rtk recall <hash>).',
+    '  2. A [rtk] original saved: <path> line means the text was spilled; read that path.',
+    '  3. If recall fails with a store error, the shell is sandboxed away from the database.',
+  ].join('\n'),
+  config: [
+    'config — where knobs live',
+    "  Every key is in cordis.patch.yml; defaults are in the plugin's Schema.",
+    '  Most useful: rewriteEnabled, compressEnabled, pipelineMode, rewriteSandboxGuard,',
+    '  compressThresholdBytes / compressThresholdByFamily, spillOriginal, annotateStyle.',
+    '  The full table is in docs/reference.md.',
+  ].join('\n'),
+}
+
 
 /** Render a boolean switch. */
 function flag(value: boolean): string {
@@ -339,6 +380,11 @@ export function createCommandHandler(context: CommandContext) {
     const raw = invocation.rawInput.trim()
     const [sub = 'status', ...rest] = raw.split(/\s+/).filter((part) => part !== '')
     switch (sub) {
+      case 'help':
+        return {
+          kind: 'success',
+          text: rest[0] === undefined ? HELP : (HELP_TOPICS[rest[0]] ?? `unknown topic; try: ${Object.keys(HELP_TOPICS).join(', ')}`),
+        }
       case 'status':
         return await status(invocation.agent)
       case 'stats': {

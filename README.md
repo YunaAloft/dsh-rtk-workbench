@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>English</strong> · <a href="./README-zh.md">中文</a> · <a href="./README-es.md">Español</a> · <a href="./README-hi.md">हिन्दी</a> · <a href="./README-pt.md">Português</a>
+  <strong>English</strong> · <a href="./README-zh.md">中文</a>
 </p>
 
 <p align="center">
@@ -19,48 +19,44 @@
 
 ## Why this exists
 
-rtk works by sitting between the agent and its tools: it rewrites a command into a filtered
-variant, and it compresses tool output before the model reads it. It ships its own adapters for
-20 agents — for Claude Code that means writing a `PreToolUse` hook into its config, and the other
-19 work the same way. **DeepSeek Harness had none of those adapters; this plugin is the missing
-one.**
+rtk sits between the agent and its tools: it rewrites commands into filtered
+equivalents and condenses tool output before the model reads it. It ships an
+adapter for each of 20 agents — for Claude Code that is a `PreToolUse` hook.
+DeepSeek Harness had no such adapter, and existing DSH plugins only implemented
+the rewrite half.
 
-The existing DSH plugins close that gap only halfway — they all implement *command rewriting*
-and stop there. That leaves two thirds of rtk's value unused:
+- No output compression: commands rtk cannot rewrite still put their full output into context.
+- No context note: the model sees `[... elided ...]`, assumes the result is incomplete, and re-runs the command.
+- No bundled binary: a plugin that only works once you install rtk somewhere else silently does nothing.
 
-| Gap | Consequence |
-|---|---|
-| No output compression | Commands rtk cannot rewrite (`node build.js`, `cat big.log`, MCP calls) still dump their full output into the context |
-| No awareness section | The model sees `[... elided ...]` and re-runs the command to "get the real output" — paying twice |
-| rtk must be installed by hand | A plugin that only works if you install something else first is a plugin that silently does nothing |
-
-This plugin closes all three, and keeps every failure path open: if rtk is missing, slow, or
-answers something unexpected, the tool call behaves exactly as it would without the plugin.
+This plugin closes all three and keeps every failure path open: if rtk is
+missing, slow, or answers something unexpected, the tool call behaves exactly as
+it would without the plugin.
 
 ## What you get
 
 | Capability | Default | How it works |
 |---|---|---|
-| **Command rewriting** | on | Wraps `ToolDefinition.execute`; `git status` runs as `rtk git status`, and a result above 500 B starts with `[rtk] ran: …` so the executed command is visible |
-| **Tool-output compression** | on (≥ 2048 B) | Runs `rtk hook claude` with a synthetic PostToolUse event in `tools/post-execute`; the condensed text replaces the content while the canonical value stays intact for `run_code` |
-| **Awareness section** | on | One static system-prompt section explaining `[rtk] ran:`, the elision markers, and `rtk recall` |
+| **Command rewriting** | on | Wraps `ToolDefinition.execute`; `git status` runs as `rtk git status`, and a result above 500 B starts with `[rtk] ran: rtk git status`. A rewrite rtk could not run is replayed as the original and labelled `[rtk] fell back:` |
+| **Output compression** | on (≥ 2048 B) | `rtk hook claude` with a synthetic PostToolUse event in `tools/post-execute`; file/search results are skipped, small test/build output uses per-verb thresholds |
+| **Recovery** | on | rtk's `rtk recall <hash>` hint stays; when the sandbox cannot reach rtk's store, the original is spilled to session-private storage and named in the result |
+| **Session visibility** | on | `/rtk status` appends this session's savings and skip reasons; `/rtk stats [--json]` is the full report |
+| **Awareness section** | on | One static prompt section explaining `[rtk] ran:`, `[rtk] fell back:`, elisions, `rtk recall` and the saved-path form; registered only after rtk is proven usable |
 | **Bundled rtk** | on | The binary ships as a per-platform optional package; nothing to install, `rtkSource: 'path'` opts out |
-| **rtk `deny` rules** | off | Feeds `rtk hook claude` a PreToolUse event and honours `permissionDecision: deny` |
-| **`/rtk` command group** | always | `status`, `tools`, `doctor`, `gain`, `recall <hash>`, and `on` / `off` per switch |
+| **rtk `deny` rules** | off | Feeds `rtk hook claude` a PreToolUse event and honours `permissionDecision: deny`; DSH has no host permission rules, so this stays off |
+| **`/rtk` commands** | always | `status`, `stats`, `tools`, `explain`, `doctor`, `gain`, `recall <hash>`, `help [topic]`, `on`/`off` per switch |
 
 Nothing here registers a new tool, replaces a shell executor, or touches the model API.
 
 ## Install
 
-**From the plugin panel** — search `dsh-rtk-workbench` in *Add plugin* and install.
-
-**With the CLI:**
+**From the plugin panel** — search `dsh-rtk-workbench` in *Add plugin* and install, or:
 
 ```sh
 dsh plugin --profile web add dsh-rtk-workbench
 ```
 
-**Or straight from a GitHub Release** — no registry involved. Pick the asset for your platform:
+**Or straight from a GitHub Release** — pick the asset for your platform:
 
 | Platform | Asset |
 |---|---|
@@ -70,176 +66,67 @@ dsh plugin --profile web add dsh-rtk-workbench
 | Linux x64 | `dsh-rtk-workbench-linux-x64.tgz` |
 | Linux arm64 | `dsh-rtk-workbench-linux-arm64.tgz` |
 
-```sh
-# `latest/download/` always resolves to the newest release, so the URL survives upgrades
-dsh plugin --profile web add https://github.com/YunaAloft/dsh-rtk-workbench/releases/latest/download/dsh-rtk-workbench-win32-x64.tgz
-```
-
-Asset names carry no version on purpose: a versioned file name would break every
-`releases/latest/download/` link on the next release. Which version you got is visible in
-`/rtk status` (`version : rtk 1.1.0`) and in the release tag.
-
-Restart the host (a bundle change is not a page reload). **You do not need to install rtk
-separately** — the platform binary is an optional dependency of this package:
-
-| # | Resolution order |
-|---|---|
-| 1 | `rtkPath` config |
-| 2 | `RTK_BIN` / `DSH_RTK_BIN` |
-| 3 | the bundled platform package (or `vendor/` inside a release tarball) |
-| 4 | `rtk` on `PATH` |
-
-A platform package that fails to download simply loses its turn, so the plugin degrades to
-"use the rtk you installed" instead of failing.
+**Restart the host after installing** (a bundle change is not a page refresh).
+You do not need to install rtk separately: the platform binary is an optional
+dependency of this package.
 
 ## Quick start
 
 ```
-/rtk status     # binary, provenance, pipeline, switches, what was patched
-/rtk doctor     # deep self-check: version, pipeline, a real round trip, recall
+/rtk status     # binary, provenance, pipeline health, switches, this session's savings
+/rtk stats      # full session report (--json for machines)
+/rtk doctor     # deep self-check: version, pipeline, a real round trip, recall, trust
 /rtk tools      # how each visible tool resolved (canonical / alias / explicit)
+/rtk explain "git status"   # why a command would (not) be rewritten
 ```
 
-Then just work normally:
-
-- ask the agent to run `git status` in a big repository → the result begins with
-  `[rtk] ran: …` and contains the compact one-line-per-file form (tiny clean trees stay
-  un-annotated on purpose: the line costs more than it saves there);
-- ask it to `cat` a 100 KB log → the result is condensed, ending with
-  `[full output: rtk recall <hash>]`;
-- paste that hash back and ask for `rtk recall <hash>` → the original comes back in full.
+Then work normally: a big `git status` comes back as a compact one-line-per-file
+result prefixed with `[rtk] ran: rtk git status`; a `cat` of a 100 KB log is
+condensed and points at `rtk recall <hash>` — or, in a sandboxed session, at an
+`[rtk] original saved: <path>` file you can read.
 
 ## How it works
 
 ```mermaid
 flowchart LR
   M[model calls a tool] --> P[tools/pre-execute]
-  P -->|patch once| X[ToolDefinition.execute]
-  X -->|rtk rewrite| R{rewritten?}
-  R -->|yes| E1["run rtk <cmd>"]
-  R -->|no| E2[run original cmd]
+  P -->|patch| X[ToolDefinition.execute]
+  X -->|rtk rewrite| R{"rewritable?"}
+  R -->|yes| E1["run rtk &lt;cmd&gt;"]
+  R -->|no| E2["run the original"]
   E1 --> C[tools/post-execute]
   E2 --> C
-  C -->|await next first| D[downstream listeners]
-  D --> G{">= 2048 B and unmarked?"}
-  G -->|yes| H[rtk hook claude → updatedToolOutput]
-  G -->|no| I[pass through]
-  H --> J[content replaced, value preserved]
+  C -->|await next| D[downstream listeners]
+  D --> G{"≥ threshold, in scope?"}
+  G -->|yes| H["rtk hook claude → updatedToolOutput"]
+  G -->|no| I[return unchanged]
+  H --> J["replace content, keep value"]
 ```
 
-Three details matter for correctness, and each cost a real bug to learn:
-
-1. **Patching, not re-dispatching.** A `tools/execute` listener that skips `next()` loses the
-   registry's signal fusion and `bodyInvoked` bookkeeping, degrading cancellation. Patching
-   `execute` keeps that machinery intact and substitutes one argument.
-2. **`await next()` first.** A `tools/post-execute` listener that returns early short-circuits
-   every listener behind it — including other plugins' notices.
-3. **The annotation never eats the body.** If a result cannot be read as text, or the tool is
-   not compressible, the annotation is added as its own block or skipped — never the other way
-   round.
+Rewriting patches `execute` instead of re-dispatching, so the registry's signal
+fusion and accounting stay intact; compression always awaits `next()` first, so
+security and spill listeners still run. The detailed rules are in the reference
+manual.
 
 ## Measured effect
 
-Reproduce with `node scripts/benchmark.mjs`: it builds a deterministic fixture repository,
-then measures each case twice — once raw, once through the same path the plugin uses
-(`rtk <command>` for rewriting, a synthetic PostToolUse event through `rtk hook claude` for
-compression).
+| Case | Path | Before | After | Drop |
+|---|---|---:|---:|---:|
+| `git status` | rewrite | 377 B | 47 B | −87.5 % |
+| `grep -rn TODO src`, 300 hits | rewrite | 20 364 B | 2 190 B | −89.2 % |
+| pytest output, 2 001 lines | compress | 89 505 B | 11 287 B | −87.4 % |
+| `package-lock.json`, read shape | compress | 76 896 B | 4 654 B | −93.9 % |
 
-| Case | Path | Before | After | Saved | Est. tokens |
-|---|---|---:|---:|---:|---:|
-| `git status` | rewrite | 377 B | 47 B | −87.5 % | 95 → 12 |
-| `git log`, 20 commits | rewrite | 3 578 B | 1 698 B | −52.5 % | 895 → 425 |
-| `git diff`, 100 changed lines | rewrite | 20 511 B | 6 945 B | −66.1 % | 5 128 → 1 737 |
-| `ls -la` | rewrite | 508 B | 138 B | −72.8 % | 127 → 35 |
-| `grep -rn TODO src`, 300 hits | rewrite | 20 364 B | 2 190 B | −89.2 % | 5 091 → 548 |
-| pytest output, 2 001 lines | compress | 89 505 B | 11 287 B | −87.4 % | 22 377 → 2 822 |
-| application log, 5 000 lines | compress | 272 640 B | 13 633 B | −95.0 % | 68 160 → 3 409 |
-| `package-lock.json`, `read` shape | compress | 76 896 B | 4 654 B | −93.9 % | 19 224 → 1 164 |
-| **Total, one call each** | | **484 379 B** | **40 592 B** | **−91.6 %** | **121 095 → 10 148** |
+`node scripts/benchmark.mjs` reproduces this on a deterministic fixture; the
+fixture is deliberately repetitive, so re-run it on your own workload before
+quoting numbers. This is bytes, not tokens: the reference manual explains the
+thresholds this table justifies.
 
-> These are bytes, not tokens: the token column is `bytes / 4`, an estimate for ASCII-heavy
-> text — read it as an order of magnitude. The fixture is synthetic on purpose (repetitive
-> logs, a 300-`TODO` file, a generated lockfile), so re-run the script on your own workload
-> before quoting a number.
 
-Latency per round trip (30 samples, `process.hrtime`):
+## Documentation
 
-| Operation | p50 |
-|---|---|
-| `rtk --version` (process start only) | 50 ms |
-| `rtk hook claude`, 8.4 KB payload | 96 ms |
-| `rtk rewrite "git status"` | 206 ms |
-| First spawn in a fresh host process | 2.7–5.8 s (the platform scanning a 17 MB unsigned binary) |
-
-That is why the compression threshold is 2048 bytes, why an already-`rtk` command never spends a
-spawn, and why the start-up probe gets its own budget instead of blocking a tool call.
-
-## Coexistence
-
-The plugin is built to sit next to whatever else you run:
-
-- **It does not take `ctx.shell`.** Rewriting happens by wrapping the registered tool, so a
-  plugin that replaces the shell executor keeps working.
-- **It always awaits `next()`** in `tools/post-execute`, so a safety plugin's "this command was
-  not checked" notice and the spill policy still run.
-- **It never names or blocks other plugins.** If another listener already replaced a result's
-  content, the plugin notices (a content diff, nothing more), keeps working, and reports
-  `observed: another result transformer changed N result(s)` in `/rtk status`.
-- **`deny` is off by default**, because command blocking usually belongs to a dedicated safety
-  plugin; `rtk`'s `allow` rules are what this plugin honours when it is on.
-
-## Configuration
-
-Every knob is a Schemastery schema; invalid values fail at load instead of at runtime.
-
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `rtkPath` | string | `''` | Explicit binary; empty = `RTK_BIN` / `DSH_RTK_BIN` / bundled / `PATH` |
-| `rtkSource` | string | `'auto'` | `auto` prefers the bundled binary, `path` always resolves through `PATH` |
-| `timeoutMs` | number | `2000` | Per-invocation budget; a timeout means no rewrite and no compression |
-| `rewriteEnabled` | boolean | `true` | Master switch for rewriting |
-| `shellTools` | string[] | `['bash','pwsh']` | Tool names treated as shells for detection |
-| `rewriteTools` | string[] | `['bash','ops_bash','pwsh']` | Eligible for rewriting; a local pre-filter skips PowerShell cmdlets and `$`-expressions, which rtk always defers on |
-| `compressEnabled` | boolean | `true` | Master switch for compression |
-| `compressTools` | string[] | `['*']` | Eligible tools; `*` = every tool's text result |
-| `excludeTools` | string[] | `[]` | Never touched, regardless of other lists |
-| `compressThresholdBytes` | number | `2048` | Below this the ~96 ms spawn is not worth it |
-| `maxPayloadBytes` | number | `2097152` | Above this skip (rtk caps hook stdin at 64 MiB) |
-| `awarenessEnabled` | boolean | `true` | Inject the awareness section |
-| `denyEnabled` | boolean | `false` | Honour rtk's `deny` verdict |
-| `pipelineMode` | string | `'plugin-owned'` | `plugin-owned` injects `RTK_CONFIG_DIR`; `user` relies on your own pipeline file |
-| `annotateRewrites` | boolean | `true` | Prepend the `[rtk] ran:` line |
-| `annotateMinBytes` | number | `500` | Skip that line when the result is shorter than this — it names a full path, so on a tiny result it costs more than the rewrite saved |
-
-`RTK_DB_PATH` and `RTK_TEE_DIR` are deliberately **not** overridden: `rtk recall` is run by the
-model through the ordinary shell, and redirecting the tee/DB would make recovery impossible.
-
-## Troubleshooting
-
-**`/rtk status` says `rtk is not usable`.** The line names the reason (`spawn`, `timeout` or
-`exit`). The first spawn in a fresh process can take seconds — a `timeout` there is usually the
-platform scanning the binary, not a broken install. If it says `via path`, the bundled package
-for your platform did not install; set `rtkPath` or install rtk yourself.
-
-**Compression never fires.** Check `/rtk tools`: a tool without a `compress` mark is not in
-`compressTools`, or the result is below `compressThresholdBytes`. If the command was rewritten,
-skipping compression is correct — rtk already produced the compact output.
-
-**Rewriting never fires.** `Get-ChildItem` and `$env:PATH` are PowerShell grammar; rtk defers on
-them by design, so the plugin does not even spend a process. `git status`, `cargo test`,
-`docker ps` and `ls` are rewritten normally.
-
-**`rtk recall` fails with a store error.** The tool shell is sandboxed (`workspace-write`) and cannot
-reach rtk's database in `%APPDATA%`; the plugin itself runs outside that sandbox. Ask the user to run
-`/rtk recall <hash>` — a slash command runs in the host process and reads the same store.
-
-**Two compressors at once.** `/rtk status` shows `observed: another result transformer …` when
-something downstream replaced a result's content. Nothing breaks, but keeping one compressor is
-usually better — `/rtk off compress` turns this one off for the session.
-
-**Nothing works in a brand-new profile.** Windows profiles may ship only the `pwsh` tool. That is
-enough for compression and for rewriting real programs; a `bash` tool appears only if a shell
-plugin provides one.
+- [Reference manual](./docs/reference.md) — commands, configuration, recovery, compatibility matrix, troubleshooting, design notes.
+- [中文手册](./docs/reference.zh.md) — the same manual in Chinese.
 
 ## Development
 
@@ -248,47 +135,23 @@ pnpm install
 node node_modules/typescript/bin/tsc --noEmit
 node node_modules/vitest/vitest.mjs run
 node node_modules/tsdown/dist/run.mjs          # build lib/
-node scripts/build-vendor.mjs                  # bundle rtk (downloads ~31 MB, cached)
-node scripts/release.mjs --dry-run             # show the publish plan
-npx dsh-plugin-dev check --cwd . --strict
-npx dsh-plugin-dev verify --cwd . \
-  --base @deepseek-ai/dsh-base@0.2.1-rc.5 \
-  --headless @deepseek-ai/dsh-headless@0.2.1-rc.5
+node scripts/build-vendor.mjs                  # package rtk (downloads ~31 MB, cached)
+node scripts/release.mjs --dry-run             # print the release plan
+node scripts/check-manifest.mjs                # package-level requirements (parsed YAML, peers, files, display meta)
+node scripts/check-docs.mjs                    # README pairing and relative-link integrity
 ```
 
-`scripts/smoke-rtk.mjs <binary>` proves a bundled binary runs on the current platform. CI runs it on
-every platform we ship — Ubuntu x64/arm64, macOS arm64/x64 and Windows — while the unit suite runs on
-Ubuntu, macOS arm64 and Windows.
-
-Pushing a change under `.github/workflows/` needs the `workflow` token scope; run
-`gh auth refresh -s workflow` once and the next push goes through.
-
-**Releasing.** Build every platform (`node scripts/build-vendor.mjs` with no `--only`), then publish
-the five platform packages and the main package in that order:
-
-```sh
-node scripts/release.mjs --yes --registry https://registry.npmjs.org
-gh release create v0.1.0 dist/github/*.tgz dist/github/checksums.txt dist/github/manifest.json \
-  --title "dsh-rtk-workbench v0.1.0 (rtk 1.1.0)" --generate-notes
-```
-
-`release.mjs` then prints a one-shot registry snapshot: a new package is accepted with HTTP 202 and
-served as `0.0.0-stage` until its staged release is approved, so a successful publish is not yet an
-installable one. Add `--verify` to wait for the staged releases instead of reading the snapshot.
-
-The order matters: the main package lists the platform packages as `optionalDependencies`, so
-publishing it first would make every install resolve zero binaries. The platform packages are named
-`dsh-rtk-workbench-<platform>` and carry the same version as the main package; the bundled rtk
-version lives in `dshRtkVersion`.
+`scripts/smoke-rtk.mjs <binary>` verifies a bundled binary. CI runs the smoke on
+every shipped platform and the unit suite on Ubuntu, macOS arm64 and Windows.
 
 ## Credits
 
-The compression rules, filters and the `hook` protocol are [rtk](https://github.com/rtk-ai/rtk)'s
-work; this plugin is the DeepSeek Harness adapter and ships the unmodified rtk binary. That binary
-is Apache-2.0 and links `rtk-engine` under BUSL-1.1: source-available, with an additional use grant
-that makes production use free and that turns into Apache-2.0 on 2030-09-09, but which does not
-permit offering rtk itself as a paid or hosted product. Both texts ship in [`licenses/`](./licenses),
-with a one-page map of what covers what.
+Compression rules, filters and the `hook` protocol are [rtk](https://github.com/rtk-ai/rtk)'s
+work; this plugin is the DeepSeek Harness adapter and redistributes the rtk
+binary unchanged. That binary is Apache-2.0 and links `rtk-engine` under
+BUSL-1.1 (source-available; production use is free and the license converts to
+Apache-2.0 on 2030-09-09, but rtk may not be offered as a paid or hosted
+product). Both texts ship in [`licenses/`](./licenses).
 
 ## License
 

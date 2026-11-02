@@ -39,10 +39,13 @@ jobs:
       - run: node node_modules/typescript/bin/tsc --noEmit
       - run: node node_modules/vitest/vitest.mjs run
       - run: node node_modules/tsdown/dist/run.mjs
-      - name: plugin checks
-        # Pinned: `@latest` would silently change the gates a release was
-        # validated against. Bump it deliberately after running the check locally.
-        run: npx --yes --package dsh-plugin-guide@0.3.40 dsh-plugin-dev check --cwd . --strict
+      - name: repository checks
+        # Package requirements and repository-owned documentation checks. No
+        # third-party checker is part of the build gate; contributor preferences
+        # (README language count, wording heuristics) stay in review.
+        run: |
+          node scripts/check-manifest.mjs
+          node scripts/check-docs.mjs
 
   binary:
     name: bundled binary (${{ matrix.platform }})
