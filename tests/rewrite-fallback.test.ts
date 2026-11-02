@@ -148,4 +148,48 @@ describe('rewrite fallback', () => {
     expect(calls[0]).toEqual({ timeoutMs: 8000, cwd: '/ws/project' })
     layer.dispose()
   })
+
+  it('reports rtk-side failures to the counters', async () => {
+    const failures: unknown[] = []
+    const candidate = definition('bash', (args) =>
+      args.command.startsWith('rtk ') ? { stdout: '', stderr: SPAWN_FAILURE, exitCode: 1 } : 'ok',
+    )
+    const layer = createRewriteLayer({
+      ctx: fakeCtx(candidate),
+      binary: 'rtk',
+      timeoutMs: 100,
+      env: {},
+      onRtkFailure: (exec) => failures.push(exec),
+      run: rewriteRunner('rtk ls -la'),
+    })
+    layer.ensurePatched('bash', undefined)
+    await invoke(candidate, { command: 'ls -la' })
+    expect(failures).toHaveLength(1)
+    layer.dispose()
+  })
+
+  it('reports a rewrite timeout', async () => {
+    const timeouts: unknown[] = []
+    const run = vi.fn(
+      async (): Promise<RtkRun> => ({
+        code: null,
+        stdout: '',
+        stderr: '',
+        failure: { kind: 'timeout', message: 'slow' },
+      }),
+    )
+    const candidate = definition('bash', () => 'ok')
+    const layer = createRewriteLayer({
+      ctx: fakeCtx(candidate),
+      binary: 'rtk',
+      timeoutMs: 100,
+      env: {},
+      onTimeout: (exec) => timeouts.push(exec),
+      run,
+    })
+    layer.ensurePatched('bash', undefined)
+    await invoke(candidate, { command: 'git status' })
+    expect(timeouts).toHaveLength(1)
+    layer.dispose()
+  })
 })

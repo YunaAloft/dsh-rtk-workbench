@@ -45,6 +45,10 @@ export interface RewriteLayerOptions {
   readonly allowRewrite?: (exec: ToolRunContext) => boolean
   /** Retry the original command when rtk itself failed. Defaults to `true`. */
   readonly retryOnRtkFailure?: boolean
+  /** Called once per rtk-side failure (spawn/run), for session counters. */
+  readonly onRtkFailure?: (exec: ToolRunContext) => void
+  /** Called once per rtk timeout, for session counters. */
+  readonly onTimeout?: (exec: ToolRunContext) => void
   /** Injectable runner, so unit tests can simulate rtk failures without a binary. */
   readonly run?: typeof runRtk
 }
@@ -95,6 +99,7 @@ export function createRewriteLayer(options: RewriteLayerOptions) {
   /** Verbs whose rewritten form failed at rtk's own layer; never rewritten again this session. */
   const learned = new Set<string>()
   let fallbacks = 0
+  let rewrites = 0
 
   /**
    * Whether the settled result is rtk failing to run the command it wraps.
@@ -165,12 +170,14 @@ export function createRewriteLayer(options: RewriteLayerOptions) {
         maxBytes: 64 * 1024,
         ...(cwd === undefined ? {} : { cwd }),
       })
+      if (run.failure?.kind === 'timeout') options.onTimeout?.(exec)
       const outcome = decideRewrite(command, run.failure === undefined ? run : null)
       if (outcome.kind !== 'rewrite') return await original.call(owner, args, exec)
       // rtk answers with a bare `rtk …`; a bundled-only install has no such PATH
       // entry, so run the binary this plugin resolved.
       const target = absolutizeRtk(outcome.command, binary, dialect)
       applied.set(exec, { from: command, to: target })
+      rewrites += 1
       let result: unknown
       try {
         const next = { ...(args as Record<string, unknown>), command: target }
@@ -187,6 +194,7 @@ export function createRewriteLayer(options: RewriteLayerOptions) {
       // never ran, so run it now and stop rewriting this verb for the session.
       learned.add(verb)
       fallbacks += 1
+      options.onRtkFailure?.(exec)
       applied.set(exec, { from: command, to: target, fallback: true })
       return await original.call(owner, args, exec)
     }
@@ -252,5 +260,19 @@ export function createRewriteLayer(options: RewriteLayerOptions) {
     return fallbacks
   }
 
-  return { ensurePatched, rewriteOf, dispose, patchedList, skippedList, learnedList, fallbackCount }
+  /** How many rewritten commands were dispatched. */
+  function rewriteCount(): number {
+    return rewrites
+  }
+
+  return {
+    ensurePatched,
+    rewriteOf,
+    dispose,
+    patchedList,
+    skippedList,
+    learnedList,
+    fallbackCount,
+    rewriteCount,
+  }
 }

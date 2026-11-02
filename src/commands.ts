@@ -1,8 +1,10 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Config } from './config'
 import { describeRun, runRtk } from './rtk/exec'
+import { isWorthRewriting, verbOf } from './rtk/rewrite'
 import { AWARENESS_SECTION_NAME } from './awareness'
-import { decideTool } from './toolmap'
+import { decideTool, dialectOf } from './toolmap'
+import type { RewriteCounters } from './stats'
 
 /** One command outcome, matching the host's `CommandResult` union. */
 export type CommandOutcome =
@@ -36,8 +38,19 @@ export interface CommandContext {
   }
   readonly env: NodeJS.ProcessEnv
   readonly timeoutMs: number
+  /** Injectable rtk runner (tests); defaults to the real spawn. */
+  readonly run?: typeof runRtk
   readonly patched: () => readonly string[]
   readonly skipped: () => ReadonlyMap<string, string>
+  /** Session counters: status summary, full report and JSON form. */
+  readonly stats: (agent: unknown) => {
+    readonly lines: readonly string[]
+    readonly report: string
+    readonly json: string
+    readonly summary: { readonly calls: number; readonly savedBytes: number }
+  }
+  /** Rewrite counters that live in the rewrite layer. */
+  readonly rewrites: () => RewriteCounters
   /** How many results a downstream listener had already transformed. */
   readonly foreignTransforms: () => number
   /** Last capability probe outcome. */
@@ -46,10 +59,12 @@ export interface CommandContext {
 
 const HELP = [
   'rtk-workbench — /rtk <subcommand>',
-  '  status         binary, pipeline, switches and observations',
+  '  status         binary, pipeline, switches, session savings',
+  '  stats [--json] full session report',
   '  tools          how each visible tool resolved (canonical / alias / explicit)',
-  '  doctor         deep self-check: binary, pipeline, round trip, recall',
-  '  gain           forward to `rtk gain`',
+  '  explain <cmd>  why a command would (not) be rewritten, via rtk hook check',
+  '  doctor         deep self-check: binary, pipeline, round trip, recall, trust',
+  '  gain           forward to `rtk gain` (rtk-wide totals, not this session)',
   '  recall <hash>  restore output rtk elided',
   '  on|off <rewrite|compress>   toggle a switch for this session',
 ].join('\n')
@@ -73,16 +88,17 @@ const DIAGNOSTIC_TIMEOUT_FLOOR = 8000
  */
 export function createCommandHandler(context: CommandContext) {
   const { ctx, config, binary } = context
+  const run = context.run ?? runRtk
 
   /** Budget shared by the diagnostic probes. */
   const budget = Math.max(context.timeoutMs, DIAGNOSTIC_TIMEOUT_FLOOR)
 
   /** `version` output of the installed binary, or a reason it is unusable. */
   async function version(): Promise<string> {
-    const run = await runRtk(binary, ['--version'], { timeoutMs: budget, env: context.env, maxBytes: 4096 })
-    if (run.failure !== undefined) return `unavailable (${describeRun(run)})`
-    if (run.code !== 0) return `unusable (${describeRun(run)})`
-    return (run.stdout || run.stderr).trim()
+    const result = await run(binary, ['--version'], { timeoutMs: budget, env: context.env, maxBytes: 4096 })
+    if (result.failure !== undefined) return `unavailable (${describeRun(result)})`
+    if (result.code !== 0) return `unusable (${describeRun(result)})`
+    return (result.stdout || result.stderr).trim()
   }
 
   /**
@@ -91,14 +107,14 @@ export function createCommandHandler(context: CommandContext) {
    * worth one line in `status`, not just in `doctor`.
    */
   async function recallState(): Promise<string> {
-    const run = await runRtk(binary, ['recall', '--list'], { timeoutMs: budget, env: context.env, maxBytes: 64 * 1024 })
-    if (run.failure !== undefined) return `unavailable (${describeRun(run)})`
-    if (run.code !== 0) return `unavailable (${(run.stderr || '').trim().split('\n')[0] ?? 'exit ' + String(run.code)})`
-    const entries = run.stdout.split('\n').filter((line) => line.trim() !== '').length - 1
+    const result = await run(binary, ['recall', '--list'], { timeoutMs: budget, env: context.env, maxBytes: 64 * 1024 })
+    if (result.failure !== undefined) return `unavailable (${describeRun(result)})`
+    if (result.code !== 0) return `unavailable (${(result.stderr || '').trim().split('\n')[0] ?? 'exit ' + String(result.code)})`
+    const entries = result.stdout.split('\n').filter((line) => line.trim() !== '').length - 1
     return `ok (${String(Math.max(0, entries))} stored output(s))`
   }
 
-  async function status(): Promise<CommandOutcome> {
+  async function status(agent: unknown): Promise<CommandOutcome> {
     const probe = context.capability()
     const pipeline = context.pipeline()
     const pipelineLine =
@@ -127,6 +143,21 @@ export function createCommandHandler(context: CommandContext) {
     }
     const foreign = context.foreignTransforms()
     if (foreign > 0) lines.push(`observed   : another result transformer changed ${String(foreign)} result(s) this session`)
+    const stats = context.stats(agent)
+    lines.push(...stats.lines)
+    // A pipeline that fell back to `rtk:default` removes compression entirely
+    // while every switch still reads "on". Two independent signals must agree:
+    // the probe recorded a problem, and this session's attempts saved nothing.
+    if (
+      config.compressEnabled &&
+      pipeline.health === 'problems' &&
+      stats.summary.calls >= 5 &&
+      stats.summary.savedBytes <= 0
+    ) {
+      lines.push(
+        `compress   : 0 bytes saved in ${String(stats.summary.calls)} calls — the injected pipeline is not active (see /rtk doctor)`,
+      )
+    }
     return { kind: 'success', text: lines.join('\n') }
   }
 
@@ -170,10 +201,10 @@ export function createCommandHandler(context: CommandContext) {
   /** Deep self-check: everything a user needs to paste into a bug report. */
   async function doctor(): Promise<CommandOutcome> {
     const lines = ['rtk-workbench doctor', `platform   : ${process.platform} ${process.arch}`, `binary     : ${binary}  (${context.binarySource})`]
-    const versionRun = await runRtk(binary, ['--version'], { timeoutMs: budget, env: context.env, maxBytes: 4096 })
+    const versionRun = await run(binary, ['--version'], { timeoutMs: budget, env: context.env, maxBytes: 4096 })
     lines.push(`rtk        : ${(versionRun.stdout || versionRun.stderr).trim() || describeRun(versionRun)}`)
 
-    const pipelineRun = await runRtk(binary, ['pipeline', 'show', 'rtk:posthook'], {
+    const pipelineRun = await run(binary, ['pipeline', 'show', 'rtk:posthook'], {
       timeoutMs: budget,
       env: context.env,
       maxBytes: 64 * 1024,
@@ -186,11 +217,11 @@ export function createCommandHandler(context: CommandContext) {
     // file that fails to resolve silently falls back to `rtk:default`, which
     // removes compression without changing a single switch in this plugin.
     const firstLine = (text: string): string => text.trim().split('\n')[0]?.slice(0, 160) ?? ''
-    const showRun = await runRtk(binary, ['pipeline', 'show'], { timeoutMs: budget, env: context.env, maxBytes: 64 * 1024 })
+    const showRun = await run(binary, ['pipeline', 'show'], { timeoutMs: budget, env: context.env, maxBytes: 64 * 1024 })
     lines.push(
       `show       : ${showRun.failure === undefined && showRun.code === 0 ? firstLine(showRun.stdout) : describeRun(showRun)}`,
     )
-    const validateRun = await runRtk(binary, ['pipeline', 'validate'], {
+    const validateRun = await run(binary, ['pipeline', 'validate'], {
       timeoutMs: budget,
       env: context.env,
       maxBytes: 16 * 1024,
@@ -198,7 +229,7 @@ export function createCommandHandler(context: CommandContext) {
     lines.push(
       `validate   : ${validateRun.failure === undefined && validateRun.code === 0 ? 'ok' : firstLine(validateRun.stderr || validateRun.stdout) || describeRun(validateRun)}`,
     )
-    const statusRun = await runRtk(binary, ['pipeline', 'status'], {
+    const statusRun = await run(binary, ['pipeline', 'status'], {
       timeoutMs: budget,
       env: context.env,
       maxBytes: 16 * 1024,
@@ -206,11 +237,11 @@ export function createCommandHandler(context: CommandContext) {
     lines.push(
       `pl status  : ${statusRun.failure === undefined && statusRun.code === 0 ? 'ok' : firstLine(statusRun.stdout || statusRun.stderr)}`,
     )
-    const methodsRun = await runRtk(binary, ['methods', 'list'], { timeoutMs: budget, env: context.env, maxBytes: 16 * 1024 })
+    const methodsRun = await run(binary, ['methods', 'list'], { timeoutMs: budget, env: context.env, maxBytes: 16 * 1024 })
     lines.push(
       `methods    : ${methodsRun.failure === undefined && methodsRun.code === 0 ? `${String(methodsRun.stdout.split('\n').length - 1)} listed` : describeRun(methodsRun)}`,
     )
-    const trustRun = await runRtk(binary, ['trust', '--list'], { timeoutMs: budget, env: context.env, maxBytes: 16 * 1024 })
+    const trustRun = await run(binary, ['trust', '--list'], { timeoutMs: budget, env: context.env, maxBytes: 16 * 1024 })
     lines.push(
       `trust      : ${trustRun.failure === undefined && trustRun.code === 0 ? firstLine(trustRun.stdout) || 'none' : describeRun(trustRun)}`,
     )
@@ -222,7 +253,7 @@ export function createCommandHandler(context: CommandContext) {
       tool_input: { command: 'cat sample.log' },
       tool_response: { stdout: sample, stderr: '', interrupted: false },
     })
-    const roundTrip = await runRtk(binary, ['hook', 'claude'], {
+    const roundTrip = await run(binary, ['hook', 'claude'], {
       input: payload,
       timeoutMs: budget,
       env: context.env,
@@ -235,7 +266,7 @@ export function createCommandHandler(context: CommandContext) {
     }
     lines.push(`round trip : ${roundTripNote}`)
 
-    const recallRun = await runRtk(binary, ['recall', '--list'], {
+    const recallRun = await run(binary, ['recall', '--list'], {
       timeoutMs: budget,
       env: context.env,
       maxBytes: 32 * 1024,
@@ -256,11 +287,46 @@ export function createCommandHandler(context: CommandContext) {
     return { kind: 'success', text: lines.join('\n') }
   }
 
+  /**
+   * Explain one command end to end: the local pre-filter, then rtk's own hook
+   * decision (`rtk hook check` runs the same decision a hook would).
+   *
+   * @param parts - the command words after `explain`.
+   */
+  async function explain(parts: readonly string[]): Promise<CommandOutcome> {
+    const command = parts.join(' ').trim()
+    if (command === '') return { kind: 'error', text: 'usage: /rtk explain <command>' }
+    const counters = context.rewrites()
+    const verb = verbOf(command) ?? ''
+    const excluded = verb !== '' && config.rewriteExcludeCommands.includes(verb)
+    const local = [
+      `command    : ${command}`,
+      `verb       : ${verb === '' ? '(none)' : verb}`,
+      `excluded   : ${excluded ? 'yes (rewriteExcludeCommands)' : 'no'}`,
+      `learned    : ${counters.learned.includes(verb) ? 'yes (rtk failed earlier this session)' : 'no'}`,
+      `pre-filter : ${isWorthRewriting(command, dialectOf(config.rewriteTools[0] ?? 'bash'), new Set(config.rewriteExcludeCommands)) ? 'eligible' : 'deferred locally'}`,
+    ]
+    const check = await run(binary, ['hook', 'check', '--agent', 'claude', command], {
+      timeoutMs: Math.max(context.timeoutMs, 5000),
+      env: context.env,
+      maxBytes: 64 * 1024,
+    })
+    let note: string
+    if (check.failure !== undefined) note = describeRun(check)
+    else if (check.code === 0) note = `would rewrite to: ${check.stdout.trim()}`
+    else {
+      const first = (check.stderr || check.stdout).trim().split('\n')[0] ?? ''
+      note = first === '' ? describeRun(check) : first
+    }
+    local.push(`rtk check  : ${note}`)
+    return { kind: 'success', text: local.join('\n') }
+  }
+
   async function forward(args: readonly string[], label: string): Promise<CommandOutcome> {
-    const run = await runRtk(binary, [...args], { timeoutMs: Math.max(context.timeoutMs, 5000), env: context.env })
-    if (run.failure !== undefined) return { kind: 'error', text: `${label}: rtk did not run (${describeRun(run)})` }
-    const text = (run.stdout + run.stderr).trim()
-    if (run.code !== 0 && text === '') return { kind: 'error', text: `${label}: exit ${String(run.code)}` }
+    const result = await run(binary, [...args], { timeoutMs: Math.max(context.timeoutMs, 5000), env: context.env })
+    if (result.failure !== undefined) return { kind: 'error', text: `${label}: rtk did not run (${describeRun(result)})` }
+    const text = (result.stdout + result.stderr).trim()
+    if (result.code !== 0 && text === '') return { kind: 'error', text: `${label}: exit ${String(result.code)}` }
     return { kind: 'success', text: text === '' ? `${label}: (no output)` : text }
   }
 
@@ -274,9 +340,15 @@ export function createCommandHandler(context: CommandContext) {
     const [sub = 'status', ...rest] = raw.split(/\s+/).filter((part) => part !== '')
     switch (sub) {
       case 'status':
-        return await status()
+        return await status(invocation.agent)
+      case 'stats': {
+        const report = context.stats(invocation.agent)
+        return { kind: 'success', text: rest.includes('--json') ? report.json : report.report }
+      }
       case 'tools':
         return await tools(invocation.agent)
+      case 'explain':
+        return await explain(rest)
       case 'doctor':
         return await doctor()
       case 'gain':

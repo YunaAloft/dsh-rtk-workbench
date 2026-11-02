@@ -32,21 +32,40 @@ function baseConfig(): Config {
   }
 }
 
+/** Deterministic rtk substitute: no process is spawned by the command tests. */
+async function fakeRun(_binary: string, args: readonly string[]) {
+  if (args[0] === '--version') return { code: 0, stdout: 'rtk 1.1.1\n', stderr: '' }
+  if (args[0] === 'recall') return { code: 0, stdout: 'hash\tcommand\nabc123\tgit status\n', stderr: '' }
+  if (args[0] === 'pipeline') return { code: 0, stdout: 'Pipeline: dsh-rtk-workbench\nInherits: rtk:posthook\n', stderr: '' }
+  if (args[0] === 'methods') return { code: 0, stdout: 'methods\nterm\n', stderr: '' }
+  if (args[0] === 'trust') return { code: 0, stdout: '', stderr: '' }
+  return { code: 0, stdout: 'ok', stderr: '' }
+}
+
 /** Handler wired to a fake registry; no rtk process is involved. */
-function makeHandler(config: Config) {
+function makeHandler(config: Config, overrides: Record<string, unknown> = {}) {
   return createCommandHandler({
     ctx: { tools: { schemas: () => [{ name: 'bash' }, { name: 'pwsh' }, { name: 'some_tool' }] } } as never,
     config,
     binary: 'rtk',
     binarySource: 'path',
+    run: fakeRun,
     pipeline: () => ({ mode: 'plugin-owned', dir: 'C:/tmp/pipeline', health: 'ok', trust: [] }),
     env: {},
     timeoutMs: 500,
     patched: () => ['bash'],
     skipped: () => new Map(),
+    stats: () => ({
+      lines: ['session    : 1 compressions'],
+      report: 'session    : test',
+      json: '{"session":"test"}',
+      summary: { calls: 1, savedBytes: 100 },
+    }),
+    rewrites: () => ({ calls: 0, fallbacks: 0, learned: [] }),
     foreignTransforms: () => 0,
     capability: () => ({ state: 'ok', detail: 'test' }),
-  })
+    ...overrides,
+  } as never)
 }
 
 describe('/rtk command handler', () => {
@@ -85,5 +104,35 @@ describe('/rtk command handler', () => {
     const outcome = await makeHandler(baseConfig()).handle({ rawInput: 'nope', agent: {} })
     const text = outcome.kind === 'success' ? (outcome.text ?? '') : ''
     expect(text).toContain('/rtk <subcommand>')
+  })
+
+  it('appends the session summary to status', async () => {
+    const outcome = await makeHandler(baseConfig()).handle({ rawInput: 'status', agent: { id: 's1' } })
+    const text = outcome.kind === 'success' ? (outcome.text ?? '') : ''
+    expect(text).toContain('session    : 1 compressions')
+    expect(text).toContain('pipeline   : plugin-owned')
+  })
+
+  it('serves the session report and its JSON form', async () => {
+    const handler = makeHandler(baseConfig())
+    const report = await handler.handle({ rawInput: 'stats', agent: {} })
+    expect(report.kind === 'success' ? report.text : '').toContain('session    : test')
+    const json = await handler.handle({ rawInput: 'stats --json', agent: {} })
+    expect(json.kind === 'success' ? json.text : '').toBe('{"session":"test"}')
+  })
+
+  it('warns when a broken pipeline produced no savings', async () => {
+    const handler = makeHandler(baseConfig(), {
+      pipeline: () => ({ mode: 'plugin-owned', dir: '', health: 'problems', detail: 'x', trust: [] }),
+      stats: () => ({
+        lines: [],
+        report: '',
+        json: '',
+        summary: { calls: 6, savedBytes: 0 },
+      }),
+    })
+    const outcome = await handler.handle({ rawInput: 'status', agent: {} })
+    const text = outcome.kind === 'success' ? (outcome.text ?? '') : ''
+    expect(text).toContain('the injected pipeline is not active')
   })
 })

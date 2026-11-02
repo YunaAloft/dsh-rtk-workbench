@@ -10,6 +10,7 @@ import { callCwd, coldStartTimeout, rewritesBlockedBySandbox, sandboxMode } from
 import { describeRun, resolveRtk, runRtk } from './rtk/exec'
 import { inspectPipeline, pipelineEnv, userPipelineCompresses } from './rtk/pipeline'
 import { spillOriginal } from './rtk/spill'
+import { createStats } from './stats'
 import { commandOf, decideTool } from './toolmap'
 
 export const name = 'dsh-rtk-workbench'
@@ -272,11 +273,14 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
         mode: sandboxMode(ctx, exec),
       }),
     retryOnRtkFailure: config.rewriteFallback === 'retry',
+    onRtkFailure: (exec) => stats.recordError(exec, 'rtk'),
+    onTimeout: (exec) => stats.recordError(exec, 'timeout'),
   })
   ctx.effect(() => () => rewrites.dispose())
 
   let foreignTransforms = 0
   const debug = process.env.RTK_WORKBENCH_DEBUG === '1'
+  const stats = createStats()
   /**
    * Whether this call's compressed result needs the original text spilled.
    *
@@ -308,6 +312,8 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
     cwdOf: (exec) => callCwd(ctx, exec),
     timeoutOf: () => coldStartTimeout(config, capability.state),
     spillOf,
+    onCompressed: (exec, inBytes, outBytes, ms) => stats.recordCompress(exec, inBytes, outBytes, ms),
+    onSkipped: (exec, reason) => stats.recordSkipped(exec, reason),
     onForeignTransform: () => {
       foreignTransforms += 1
     },
@@ -379,6 +385,25 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
       timeoutMs: config.timeoutMs,
       patched: () => rewrites.patchedList(),
       skipped: () => rewrites.skippedList(),
+      stats: (agent: unknown) => {
+        const key = stats.keyOfAgent(agent)
+        const counters = {
+          calls: rewrites.rewriteCount(),
+          fallbacks: rewrites.fallbackCount(),
+          learned: rewrites.learnedList(),
+        }
+        return {
+          lines: stats.formatLines(key, counters),
+          report: stats.formatReport(key, counters),
+          json: stats.toJson(key, counters),
+          summary: stats.summary(key),
+        }
+      },
+      rewrites: () => ({
+        calls: rewrites.rewriteCount(),
+        fallbacks: rewrites.fallbackCount(),
+        learned: rewrites.learnedList(),
+      }),
       foreignTransforms: () => foreignTransforms,
       capability: () => ({ state: capability.state, detail: capability.detail }),
     })

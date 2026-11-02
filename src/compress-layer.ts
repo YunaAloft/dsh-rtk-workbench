@@ -2,6 +2,7 @@ import type { PostToolDecision, ToolExecution, ToolExecutionResult } from '@deep
 import type { Config } from './config'
 import { compressWithRtk, pickShape, type HookOutput } from './rtk/compress'
 import { verbOf } from './rtk/rewrite'
+import type { SkipReason } from './stats'
 import { commandOf, decideTool, pathOf, patternOf } from './toolmap'
 
 type AcceptDecision = Extract<PostToolDecision, { kind: 'accept' }>
@@ -37,6 +38,10 @@ export interface CompressLayerOptions {
   ) => Promise<string | undefined>
   /** Optional sink for timing diagnostics (`RTK_WORKBENCH_DEBUG=1`). */
   readonly log?: (message: string) => void
+  /** Session counters: one call per compression pass. */
+  readonly onCompressed?: (exec: ToolExecution, inBytes: number, outBytes: number, ms: number) => void
+  /** Session counters: one call per deliberately skipped result. */
+  readonly onSkipped?: (exec: ToolExecution, reason: SkipReason) => void
   /**
    * Called once per result whose content a *downstream* listener already
    * replaced. This is the only reliable, name-free signal that another result
@@ -142,9 +147,19 @@ export function createCompressLayer(options: CompressLayerOptions) {
           signal: exec.signal,
           ...(cwd === undefined ? {} : { cwd }),
         })
+        const elapsed = Date.now() - started
+        options.onCompressed?.(exec, text.length, compressed?.text.length ?? text.length, elapsed)
         options.log?.(
-          `compress ${exec.name}: ${String(text.length)} -> ${String(compressed?.text.length ?? 0)} B in ${String(Date.now() - started)} ms`,
+          `compress ${exec.name}: ${String(text.length)} -> ${String(compressed?.text.length ?? 0)} B in ${String(elapsed)} ms`,
         )
+      } else if (!inScope) {
+        options.onSkipped?.(exec, 'scope')
+      } else if (text.length < threshold) {
+        options.onSkipped?.(exec, 'size')
+      } else if (text.length > config.maxPayloadBytes) {
+        options.onSkipped?.(exec, 'payload')
+      } else if (ALREADY_MARKED.test(text)) {
+        options.onSkipped?.(exec, 'marked')
       }
     }
 
