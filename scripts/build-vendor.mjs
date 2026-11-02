@@ -156,13 +156,18 @@ function writeSubPackage(platform, binary) {
   const manifest = {
     name: platformPackageName(platform.id),
     version: PLUGIN_VERSION,
-    description: `Bundled rtk ${RTK_VERSION} binary for ${platform.os}-${platform.cpu}.`,
+    description: `Bundled rtk ${RTK_VERSION} binary for ${platform.os}-${platform.cpu} (upstream: github.com/rtk-ai/rtk).`,
     // The CLI is Apache-2.0; the compression engine it links is BUSL-1.1.
     license: 'Apache-2.0 AND BUSL-1.1',
     os: [platform.os],
     cpu: [platform.cpu],
     files: ['bin', 'LICENSE', 'LICENSE-ENGINE'],
-    repository: { type: 'git', url: 'https://github.com/rtk-ai/rtk' },
+    // npm renders `repository` as "where this package's source lives", so it
+    // has to point at the repo that publishes these packages. Pointing it at
+    // rtk-ai/rtk would send users' issues to a project that neither publishes
+    // this wrapper nor knows about it; upstream attribution lives in the
+    // description and in licenses/ instead.
+    repository: { type: 'git', url: 'git+https://github.com/YunaAloft/dsh-rtk-workbench.git' },
   }
   writeFileSync(join(dir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`)
   for (const file of ['LICENSE', 'LICENSE-ENGINE']) {
