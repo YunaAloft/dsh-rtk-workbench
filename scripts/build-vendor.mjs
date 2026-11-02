@@ -104,6 +104,32 @@ function extract(archive, destination) {
   run(tarBinary(), ['-xf', archive, '-C', destination])
 }
 
+/**
+ * Copy the licence files that ship inside a release archive into the repo's
+ * `licenses/` directory, so the platform packages can carry them.
+ *
+ * The full rtk build is Apache-2.0 for the CLI plus BUSL-1.1 for `rtk-engine`,
+ * and BUSL requires its text to travel with the distributed binary. The Apache
+ * one is regenerated from the archive rather than hand-copied, so it always
+ * matches the version actually bundled.
+ */
+function captureLicenses(extractDir) {
+  const target = join(ROOT, 'licenses')
+  mkdirSync(target, { recursive: true })
+  for (const name of ['LICENSE', 'LICENSE-ENGINE']) {
+    const source = findFile(extractDir, name)
+    if (source === undefined) {
+      console.warn(`  warning: ${name} is missing from the archive; the bundled binary needs it`)
+      continue
+    }
+    // The Windows zip ships CRLF and the tarballs ship LF; normalise so the
+    // checked-in copy does not depend on which archive was unpacked last.
+    const text = readFileSync(source, 'utf8')
+    const normalised = text.split(String.fromCharCode(13, 10)).join(String.fromCharCode(10))
+    writeFileSync(join(target, `rtk-${name}`), normalised)
+  }
+}
+
 /** Find a file by basename under a directory tree. */
 function findFile(dir, name) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -131,14 +157,15 @@ function writeSubPackage(platform, binary) {
     name: platformPackageName(platform.id),
     version: PLUGIN_VERSION,
     description: `Bundled rtk ${RTK_VERSION} binary for ${platform.os}-${platform.cpu}.`,
-    license: 'Apache-2.0',
+    // The CLI is Apache-2.0; the compression engine it links is BUSL-1.1.
+    license: 'Apache-2.0 AND BUSL-1.1',
     os: [platform.os],
     cpu: [platform.cpu],
-    files: ['bin', 'LICENSE', 'NOTICE'],
+    files: ['bin', 'LICENSE', 'LICENSE-ENGINE'],
     repository: { type: 'git', url: 'https://github.com/rtk-ai/rtk' },
   }
   writeFileSync(join(dir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`)
-  for (const file of ['LICENSE', 'NOTICE']) {
+  for (const file of ['LICENSE', 'LICENSE-ENGINE']) {
     const source = join(ROOT, 'licenses', `rtk-${file}`)
     if (existsSync(source)) copyFileSync(source, join(dir, file))
   }
@@ -168,7 +195,7 @@ function packFatTarball(platform, vendorBinary) {
   rmSync(stage, { recursive: true, force: true })
   mkdirSync(stage, { recursive: true })
   const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
-  for (const entry of ['lib', 'locale', 'cordis.patch.yml', 'icon.svg', 'README.md', 'README-zh.md', 'README-es.md', 'README-hi.md', 'README-pt.md', 'LICENSE']) {
+  for (const entry of ['lib', 'locale', 'cordis.patch.yml', 'icon.svg', 'README.md', 'README-zh.md', 'README-es.md', 'README-hi.md', 'README-pt.md', 'LICENSE', 'licenses']) {
     const source = join(ROOT, entry)
     if (!existsSync(source)) continue
     if (statSync(source).isDirectory()) {
@@ -185,10 +212,11 @@ function packFatTarball(platform, vendorBinary) {
   chmodSync(join(binDir, platform.bin), 0o755)
   // `lib/` is already built: a prepare script here would try to run tsdown in a
   // staging directory that has no node_modules.
+  manifest.license = 'Apache-2.0 AND BUSL-1.1'
   manifest.scripts = {}
   manifest.devDependencies = {}
   manifest.optionalDependencies = {}
-  manifest.files = [...new Set([...(manifest.files ?? []), 'vendor'])]
+  manifest.files = [...new Set([...(manifest.files ?? []), 'vendor', 'licenses'])]
   writeFileSync(join(stage, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`)
   const packed = packDirectory(stage, DIST_GH)
   rmSync(stage, { recursive: true, force: true })
@@ -219,6 +247,7 @@ for (const platform of targets) {
   extract(archive, extractDir)
   const binary = findFile(extractDir, platform.bin)
   if (binary === undefined) throw new Error(`${platform.asset} does not contain ${platform.bin}`)
+  captureLicenses(extractDir)
   const vendorDir = join(VENDOR, platform.id)
   mkdirSync(vendorDir, { recursive: true })
   const vendorBinary = join(vendorDir, platform.bin)
