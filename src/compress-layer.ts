@@ -15,6 +15,13 @@ export interface CompressLayerOptions {
   readonly timeoutMs: number
   readonly env: NodeJS.ProcessEnv
   readonly config: Config
+  /**
+   * Session directory for one call. rtk attributes a saving to the project of
+   * its own process cwd, so the hook child has to run in the session directory.
+   */
+  readonly cwdOf?: (exec: ToolExecution) => string | undefined
+  /** Per-call budget (the cold-start budget applies until the probe settles). */
+  readonly timeoutOf?: () => number
   /** Optional sink for timing diagnostics (`RTK_WORKBENCH_DEBUG=1`). */
   readonly log?: (message: string) => void
   /**
@@ -69,7 +76,7 @@ export function createCompressLayer(options: CompressLayerOptions) {
     exec: ToolExecution,
     result: Readonly<ToolExecutionResult>,
     content: Blocks,
-    rewrite: { readonly from: string; readonly to: string } | undefined,
+    rewrite: { readonly from: string; readonly to: string; readonly fallback?: boolean } | undefined,
   ): Promise<Blocks | undefined> {
     // A PTC sub-call result reaches the program, not the model, unless the outer
     // run_code prints it; touching it would only cost a spawn.
@@ -96,6 +103,7 @@ export function createCompressLayer(options: CompressLayerOptions) {
         !ALREADY_MARKED.test(text)
       if (worthIt) {
         const started = Date.now()
+        const cwd = options.cwdOf?.(exec)
         compressed = await compressWithRtk({
           binary,
           shape: pickShape(path, text),
@@ -105,8 +113,9 @@ export function createCompressLayer(options: CompressLayerOptions) {
           path: path ?? '',
           text,
           env,
-          timeoutMs,
+          timeoutMs: options.timeoutOf?.() ?? timeoutMs,
           signal: exec.signal,
+          ...(cwd === undefined ? {} : { cwd }),
         })
         options.log?.(
           `compress ${exec.name}: ${String(text.length)} -> ${String(compressed?.length ?? 0)} B in ${String(Date.now() - started)} ms`,
@@ -120,8 +129,10 @@ export function createCompressLayer(options: CompressLayerOptions) {
     // large enough to make it noise; `/rtk status` still records the rewrite.
     // Non-text results have no comparable size — keep the signal there.
     const annotation =
-      wantsAnnotation && (body === undefined || body.length >= config.annotateMinBytes)
-        ? `[rtk] ran: ${rewrite.to}`
+      wantsAnnotation && rewrite !== undefined && (body === undefined || body.length >= config.annotateMinBytes)
+        ? rewrite.fallback === true
+          ? `[rtk] fell back: ${rewrite.from}`
+          : `[rtk] ran: ${rewrite.to}`
         : undefined
     if (annotation === undefined && compressed === null) return undefined
 
@@ -147,7 +158,9 @@ export function createCompressLayer(options: CompressLayerOptions) {
       exec: ToolExecution,
       result: Readonly<ToolExecutionResult>,
       next: () => Promise<PostToolDecision>,
-      rewriteOf: (exec: object) => { readonly from: string; readonly to: string } | undefined,
+      rewriteOf: (
+        exec: object,
+      ) => { readonly from: string; readonly to: string; readonly fallback?: boolean } | undefined,
     ): Promise<PostToolDecision> {
       const base = await next()
       try {

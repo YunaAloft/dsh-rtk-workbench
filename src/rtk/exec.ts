@@ -109,9 +109,16 @@ export async function runRtk(
     readonly signal?: AbortSignal
     readonly env?: NodeJS.ProcessEnv
     readonly maxBytes?: number
+    /**
+     * Working directory for the child. rtk records the project of a call from
+     * its own process cwd (never from the hook payload), and project-scoped
+     * pipeline / filter files resolve against it, so the directory the command
+     * actually runs in is what makes attribution and project rules correct.
+     */
+    readonly cwd?: string
   } = {},
 ): Promise<RtkRun> {
-  const { input = '', timeoutMs = 2000, signal, env = process.env, maxBytes = 8 * 1024 * 1024 } = options
+  const { input = '', timeoutMs = 2000, signal, env = process.env, maxBytes = 8 * 1024 * 1024, cwd } = options
   const aborted: RtkRun = {
     code: null,
     stdout: '',
@@ -140,6 +147,7 @@ export async function runRtk(
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
         env,
+        ...(cwd === undefined ? {} : { cwd }),
         // `shell: false` is deliberate: the command string is data for rtk,
         // never something this process interpolates.
         shell: false,

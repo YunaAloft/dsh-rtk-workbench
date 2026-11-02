@@ -6,6 +6,7 @@ import { createCompressLayer } from './compress-layer'
 import { Config } from './config'
 import type { Config as ConfigShape } from './config'
 import { createRewriteLayer } from './rewrite-layer'
+import { callCwd, coldStartTimeout, rewritesBlockedBySandbox, sandboxMode } from './runtime'
 import { describeRun, resolveRtk, runRtk } from './rtk/exec'
 import { pipelineEnv } from './rtk/pipeline'
 import { commandOf, decideTool } from './toolmap'
@@ -142,7 +143,7 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
   function probeInBackground(): void {
     if (capability.probing) return
     capability.probing = true
-    const budget = Math.max(config.timeoutMs, 8000)
+    const budget = Math.max(config.timeoutMs, config.coldStartTimeoutMs)
     const started = Date.now()
     void runRtk(binary, ['--version'], { timeoutMs: budget, env })
       .then((run) => {
@@ -190,6 +191,19 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
     timeoutMs: config.timeoutMs,
     env,
     excludeCommands: config.rewriteExcludeCommands,
+    // rtk records the project (and resolves project-scoped rules) from its own
+    // process cwd; the host's launch directory would be the wrong answer.
+    cwdOf: (exec) => callCwd(ctx, exec),
+    timeoutOf: () => coldStartTimeout(config, capability.state),
+    // Windows + confined sandbox denies the wrapped command its own child
+    // process, so a rewrite would only turn a working command into a failed one.
+    allowRewrite: (exec) =>
+      !rewritesBlockedBySandbox({
+        platform: process.platform,
+        guard: config.rewriteSandboxGuard,
+        mode: sandboxMode(ctx, exec),
+      }),
+    retryOnRtkFailure: config.rewriteFallback === 'retry',
   })
   ctx.effect(() => () => rewrites.dispose())
 
@@ -200,6 +214,8 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
     timeoutMs: config.timeoutMs,
     env,
     config,
+    cwdOf: (exec) => callCwd(ctx, exec),
+    timeoutOf: () => coldStartTimeout(config, capability.state),
     onForeignTransform: () => {
       foreignTransforms += 1
     },

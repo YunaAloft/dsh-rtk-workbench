@@ -104,6 +104,12 @@ export async function compressWithRtk(options: {
   readonly env: NodeJS.ProcessEnv
   readonly timeoutMs: number
   readonly signal?: AbortSignal
+  /**
+   * Working directory for the hook child. rtk records the project of one call
+   * from its own process cwd, so the session directory makes the saving
+   * attributable to the project the user is actually working in.
+   */
+  readonly cwd?: string
 }): Promise<string | null> {
   const payload = buildPostToolUsePayload(options.shape, options.command, options.path, options.text)
   const run = await runRtk(options.binary, ['hook', 'claude'], {
@@ -112,6 +118,7 @@ export async function compressWithRtk(options: {
     signal: options.signal,
     env: options.env,
     maxBytes: options.text.length * 2 + 64 * 1024,
+    ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
   })
   if (run.failure !== undefined || run.code !== 0) return null
   const updated = extractUpdatedText(options.shape, run.stdout)

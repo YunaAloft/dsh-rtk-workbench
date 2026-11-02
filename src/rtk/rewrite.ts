@@ -202,3 +202,55 @@ export function isWorthRewriting(
     return true
   })
 }
+
+/**
+ * The command word that identifies a verb for session-level bookkeeping.
+ *
+ * Uses the same first-segment/first-token rule as {@link isWorthRewriting} and
+ * normalises a path or `.exe` suffix so `C:/x/git.exe` and `git` share one key.
+ *
+ * @param command - a shell command line.
+ * @returns the verb, or `undefined` for an empty command.
+ */
+export function verbOf(command: string): string | undefined {
+  const first = splitSegments(command)[0]?.split(/\s+/)[0]
+  if (first === undefined || first === '') return undefined
+  const unquoted = first.replace(/^["']|["']$/g, '')
+  const base = unquoted.split(/[\\/]/).pop() ?? unquoted
+  return base.replace(/\.exe$/i, '') || undefined
+}
+
+/**
+ * Serialise a tool result for failure inspection, bounded so a huge body never
+ * becomes part of the decision.
+ *
+ * @param value - whatever `ToolDefinition.execute` returned.
+ * @param maxBytes - cap on the inspected text.
+ */
+export function resultText(value: unknown, maxBytes = 64 * 1024): string {
+  try {
+    const text = JSON.stringify(value)
+    return typeof text === 'string' ? text.slice(0, maxBytes) : ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Whether a tool result is rtk's *own* failure rather than the proxied command's.
+ *
+ * Deliberately narrow. A failed `git status` inside a valid repository prints
+ * git's error and must not be retried (side effects); this only matches the
+ * signature rtk itself emits when it cannot start or run the command it wraps:
+ * `rtk: Failed to run <cmd>: Failed to spawn process: … (os error 5)`.
+ *
+ * @param text - serialised result (see {@link resultText}).
+ */
+export function looksLikeRtkFailure(text: string): boolean {
+  if (!text.includes('rtk:')) return false
+  return (
+    /rtk: Failed to (?:run|execute|spawn)\b/.test(text) ||
+    /rtk: [^\n]{0,200}Failed to spawn process/.test(text) ||
+    /rtk: [^\n]{0,200}(?:os error 5|Access is denied|拒绝访问)/.test(text)
+  )
+}

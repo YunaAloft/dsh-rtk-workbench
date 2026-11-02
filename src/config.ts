@@ -18,8 +18,26 @@ export interface Config {
   rtkSource: 'auto' | 'path'
   /** Per-invocation timeout in milliseconds. Timeout = no rewrite / no compression. */
   timeoutMs: number
+  /**
+   * Budget for the first rtk call in a fresh host process. The platform may
+   * scan the unsigned bundled binary on first spawn (measured 2.7–5.8 s), which
+   * the ordinary per-call budget would misread as "rtk is unusable".
+   */
+  coldStartTimeoutMs: number
   /** Master switch for command rewriting. */
   rewriteEnabled: boolean
+  /**
+   * Retry the original command when rtk itself failed to run the rewritten one
+   * (spawn denied, binary unusable). A retry can duplicate a partially executed
+   * command, so it is limited to rtk's own failure signature.
+   */
+  rewriteFallback: 'retry' | 'off'
+  /**
+   * Windows only: skip rewriting while the session's sandbox confines child
+   * processes (`workspace-write` / `read-only`), where `rtk <cmd>` cannot spawn
+   * the real command. `off` forces rewriting even there.
+   */
+  rewriteSandboxGuard: 'auto' | 'off'
   /** Tool names treated as shells for detection (official names first). */
   shellTools: string[]
   /** Tool names eligible for rewriting (POSIX shells only by default). */
@@ -62,7 +80,22 @@ export const Config: Schema<Config> = Schema.object({
   timeoutMs: Schema.number()
     .default(2000)
     .description('Per-invocation timeout in milliseconds; a timeout means no rewrite and no compression.'),
+  coldStartTimeoutMs: Schema.number()
+    .default(8000)
+    .description(
+      'Budget for the first call in a fresh host process; the platform may scan the bundled binary on first spawn.',
+    ),
   rewriteEnabled: Schema.boolean().default(true).description('Master switch for command rewriting.'),
+  rewriteFallback: Schema.union(['retry', 'off'])
+    .default('retry')
+    .description(
+      'Retry the original command when rtk itself failed to run the rewritten one. Limited to rtk failure signatures.',
+    ),
+  rewriteSandboxGuard: Schema.union(['auto', 'off'])
+    .default('auto')
+    .description(
+      'Windows only: skip rewriting while the session sandbox confines child processes (workspace-write / read-only).',
+    ),
   shellTools: Schema.array(Schema.string())
     .default(['bash', 'pwsh'])
     .description('Tool names treated as shells for detection (official DSH names first).'),
