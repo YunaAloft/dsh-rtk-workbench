@@ -105,3 +105,16 @@ export function pathOf(args: unknown): string | undefined {
   }
   return undefined
 }
+
+/**
+ * Extract a search pattern a call carries, if any (grep / glob family).
+ *
+ * Search results are already the minimal form of their input, so the
+ * compression layer treats a pattern-only call like a file read: rtk's term
+ * chain would only cap matches the caller asked for.
+ */
+export function patternOf(args: unknown): string | undefined {
+  if (typeof args !== 'object' || args === null) return undefined
+  const value = (args as Record<string, unknown>).pattern
+  return typeof value === 'string' && value.trim() !== '' ? value : undefined
+}

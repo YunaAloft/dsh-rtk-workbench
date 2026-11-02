@@ -54,6 +54,26 @@ export interface Config {
   compressThresholdBytes: number
   /** Skip compression above this many bytes (rtk caps hook stdin at 64 MiB). */
   maxPayloadBytes: number
+  /**
+   * Compress file-reading tool results too. Off by default: the host's own
+   * file/search tools already bound their output, and rtk's cap would truncate
+   * source code that the caller asked for exactly.
+   */
+  compressFileTools: boolean
+  /**
+   * Per-verb compression thresholds. Small-but-noisy family outputs (test
+   * runners, builds, docker) are worth a spawn below the global threshold;
+   * unlisted verbs fall back to `compressThresholdBytes`.
+   */
+  compressThresholdByFamily: Record<string, number>
+  /**
+   * Spill the original text through the host's spill store when rtk's own
+   * recall path is unreachable (sandboxed shell, broken store). `auto` also
+   * spills when rtk's compressed text carries no recall hint.
+   */
+  spillOriginal: 'auto' | 'always' | 'off'
+  /** Skip spilling texts above this many bytes. */
+  maxSpillBytes: number
   /** Inject the rtk awareness section into the system prompt. */
   awarenessEnabled: boolean
   /** Honour rtk's `deny` verdict from the PreToolUse bridge. Default off. */
@@ -123,6 +143,30 @@ export const Config: Schema<Config> = Schema.object({
   maxPayloadBytes: Schema.number()
     .default(2 * 1024 * 1024)
     .description('Skip compression above this many bytes (rtk caps hook stdin at 64 MiB).'),
+  compressFileTools: Schema.boolean()
+    .default(false)
+    .description('Compress file-reading tool results too (default: shell/MCP/web plus JSON and lockfiles only).'),
+  compressThresholdByFamily: Schema.dict(Schema.number())
+    .default({
+      pytest: 512,
+      cargo: 512,
+      docker: 512,
+      git: 512,
+      npm: 512,
+      pnpm: 512,
+      yarn: 512,
+      make: 512,
+      go: 512,
+      mvn: 512,
+      gradle: 512,
+    })
+    .description('Per-verb compression thresholds; unlisted verbs use compressThresholdBytes.'),
+  spillOriginal: Schema.union(['auto', 'always', 'off'])
+    .default('auto')
+    .description('Spill the original text when rtk recall is unreachable (auto), always, or never.'),
+  maxSpillBytes: Schema.number()
+    .default(1024 * 1024)
+    .description('Skip spilling texts larger than this many bytes.'),
   awarenessEnabled: Schema.boolean().default(true).description('Inject the rtk awareness section into the system prompt.'),
   denyEnabled: Schema.boolean().default(false).description("Honour rtk's deny verdict. Off by default: cc-safety-net already covers command blocking."),
   pipelineMode: Schema.union(['plugin-owned', 'user'])

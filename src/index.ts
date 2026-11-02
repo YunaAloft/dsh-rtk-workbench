@@ -9,6 +9,7 @@ import { createRewriteLayer } from './rewrite-layer'
 import { callCwd, coldStartTimeout, rewritesBlockedBySandbox, sandboxMode } from './runtime'
 import { describeRun, resolveRtk, runRtk } from './rtk/exec'
 import { pipelineEnv } from './rtk/pipeline'
+import { spillOriginal } from './rtk/spill'
 import { commandOf, decideTool } from './toolmap'
 
 export const name = 'dsh-rtk-workbench'
@@ -35,6 +36,8 @@ interface Capability {
   detail: string
   probedAt: number
   probing: boolean
+  /** Whether rtk's recall store is usable from this host (drives spill decisions). */
+  recall: 'unknown' | 'ok' | 'fail'
 }
 
 /** How long a failed probe is trusted before a background re-probe. */
@@ -132,7 +135,13 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
     return { info: (m: string) => console.info(m), warn: (m: string) => console.warn(m) }
   })()
 
-  const capability: Capability = { state: 'unknown', detail: 'not probed yet', probedAt: 0, probing: false }
+  const capability: Capability = {
+    state: 'unknown',
+    detail: 'not probed yet',
+    probedAt: 0,
+    probing: false,
+    recall: 'unknown',
+  }
 
   /**
    * Probe the binary in the background.
@@ -166,7 +175,11 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
         // so elided text is gone for good. Say so once, with the usual cause.
         if (!config.compressEnabled) return
         return runRtk(binary, ['recall', '--list'], { timeoutMs: budget, env, maxBytes: 64 * 1024 }).then((probe) => {
-          if (probe.failure === undefined && probe.code === 0) return
+          if (probe.failure === undefined && probe.code === 0) {
+            capability.recall = 'ok'
+            return
+          }
+          capability.recall = 'fail'
           logger.warn?.(
             `[rtk-workbench] recall store unavailable (${describeRun(probe)}); compressed output will not be recoverable. ` +
               'This usually means the directory holding the binary refuses writes (a read-only mount or a restrictive ACL): ' +
@@ -209,6 +222,29 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
 
   let foreignTransforms = 0
   const debug = process.env.RTK_WORKBENCH_DEBUG === '1'
+  /**
+   * Whether this call's compressed result needs the original text spilled.
+   *
+   * Three independent reasons: `always`, a confined sandbox (the model's shell
+   * can read files but cannot write rtk's store, so `rtk recall` fails there),
+   * a broken recall store, or rtk not having offered a recall hint at all.
+   */
+  const spillOf = async (
+    exec: ToolExecution,
+    text: string,
+    offeredRecall: boolean,
+  ): Promise<string | undefined> => {
+    if (config.spillOriginal === 'off') return undefined
+    const confined = rewritesBlockedBySandbox({
+      platform: process.platform,
+      guard: 'auto',
+      mode: sandboxMode(ctx, exec),
+    })
+    const needed =
+      config.spillOriginal === 'always' || confined || capability.recall === 'fail' || !offeredRecall
+    if (!needed) return undefined
+    return await spillOriginal(ctx, exec, text, config.maxSpillBytes)
+  }
   const compression = createCompressLayer({
     binary,
     timeoutMs: config.timeoutMs,
@@ -216,6 +252,7 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
     config,
     cwdOf: (exec) => callCwd(ctx, exec),
     timeoutOf: () => coldStartTimeout(config, capability.state),
+    spillOf,
     onForeignTransform: () => {
       foreignTransforms += 1
     },

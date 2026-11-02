@@ -1,7 +1,8 @@
 import type { PostToolDecision, ToolExecution, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import type { Config } from './config'
-import { compressWithRtk, pickShape } from './rtk/compress'
-import { commandOf, decideTool, pathOf } from './toolmap'
+import { compressWithRtk, pickShape, type HookOutput } from './rtk/compress'
+import { verbOf } from './rtk/rewrite'
+import { commandOf, decideTool, pathOf, patternOf } from './toolmap'
 
 type AcceptDecision = Extract<PostToolDecision, { kind: 'accept' }>
 type Blocks = NonNullable<AcceptDecision['content']>
@@ -22,6 +23,18 @@ export interface CompressLayerOptions {
   readonly cwdOf?: (exec: ToolExecution) => string | undefined
   /** Per-call budget (the cold-start budget applies until the probe settles). */
   readonly timeoutOf?: () => number
+  /** Injectable round trip; tests replace it to observe the decision only. */
+  readonly compress?: typeof compressWithRtk
+  /**
+   * Spill the pre-compression text. The plugin decides whether this environment
+   * needs it (sandboxed shell, broken recall store, no recall hint); returning
+   * `undefined` leaves rtk's own hint in place.
+   */
+  readonly spillOf?: (
+    exec: ToolExecution,
+    text: string,
+    rtkOfferedRecall: boolean,
+  ) => Promise<string | undefined>
   /** Optional sink for timing diagnostics (`RTK_WORKBENCH_DEBUG=1`). */
   readonly log?: (message: string) => void
   /**
@@ -63,6 +76,7 @@ function replacedValue(decision: PostToolDecision): boolean {
  */
 export function createCompressLayer(options: CompressLayerOptions) {
   const { binary, timeoutMs, env, config } = options
+  const roundTrip = options.compress ?? compressWithRtk
 
   /**
    * Compress and/or annotate one settled tool result.
@@ -70,7 +84,7 @@ export function createCompressLayer(options: CompressLayerOptions) {
    * @param exec - the call that just ran.
    * @param result - the normalized dispatch result (for `isError` only).
    * @param content - the content to transform (downstream decision applied).
-   * @param rewrite - `[rtk] ran:` information when this call was rewritten.
+   * @param rewrite - rewrite information when this call was rewritten.
    */
   async function run(
     exec: ToolExecution,
@@ -94,19 +108,30 @@ export function createCompressLayer(options: CompressLayerOptions) {
     if (result.isError && (text === undefined || text === '')) return undefined
     const command = commandOf(exec.arguments)
     const path = pathOf(exec.arguments)
+    const pattern = patternOf(exec.arguments)
 
-    let compressed: string | null = null
+    let compressed: HookOutput | null = null
     if (decision.compress && !result.isError && text !== undefined) {
+      const shape = pickShape(path, text)
+      // A file-reading or search call is left alone unless the caller opted in:
+      // the host already bounds those results, and rtk's cap would truncate
+      // source the caller asked for exactly. JSON and lockfiles stay — rtk's
+      // read shape is where their summary actually pays off.
+      const fileShaped = command === undefined && (path !== undefined || pattern !== undefined)
+      const inScope = !fileShaped || config.compressFileTools || shape === 'read'
+      const verb = command === undefined ? undefined : verbOf(command)
+      const threshold =
+        verb === undefined
+          ? config.compressThresholdBytes
+          : (config.compressThresholdByFamily[verb] ?? config.compressThresholdBytes)
       const worthIt =
-        text.length >= config.compressThresholdBytes &&
-        text.length <= config.maxPayloadBytes &&
-        !ALREADY_MARKED.test(text)
+        inScope && text.length >= threshold && text.length <= config.maxPayloadBytes && !ALREADY_MARKED.test(text)
       if (worthIt) {
         const started = Date.now()
         const cwd = options.cwdOf?.(exec)
-        compressed = await compressWithRtk({
+        compressed = await roundTrip({
           binary,
-          shape: pickShape(path, text),
+          shape,
           // The REWRITTEN command: rtk's `is_rtk_command` gate reads it to skip
           // output rtk itself already produced (m0-findings §1 E1d).
           command: rewrite?.to ?? command ?? '',
@@ -118,31 +143,43 @@ export function createCompressLayer(options: CompressLayerOptions) {
           ...(cwd === undefined ? {} : { cwd }),
         })
         options.log?.(
-          `compress ${exec.name}: ${String(text.length)} -> ${String(compressed?.length ?? 0)} B in ${String(Date.now() - started)} ms`,
+          `compress ${exec.name}: ${String(text.length)} -> ${String(compressed?.text.length ?? 0)} B in ${String(Date.now() - started)} ms`,
         )
       }
     }
 
-    const body = compressed ?? text
-    // The annotation names a ~130-character absolute path. On a short result it
-    // costs more than the rewrite saved, so it is only added once the body is
-    // large enough to make it noise; `/rtk status` still records the rewrite.
-    // Non-text results have no comparable size — keep the signal there.
-    const annotation =
-      wantsAnnotation && rewrite !== undefined && (body === undefined || body.length >= config.annotateMinBytes)
-        ? rewrite.fallback === true
-          ? `[rtk] fell back: ${rewrite.from}`
-          : `[rtk] ran: ${rewrite.to}`
-        : undefined
-    if (annotation === undefined && compressed === null) return undefined
+    const body = compressed?.text ?? text
+    const notes: string[] = []
+    // The annotation names a ~130-character absolute path in 'full' style; on a
+    // short result it costs more than the rewrite saved, so it is only added
+    // once the body is large enough to make it noise. Non-text results have no
+    // comparable size — keep the signal there.
+    if (
+      wantsAnnotation &&
+      rewrite !== undefined &&
+      (body === undefined || body.length >= config.annotateMinBytes)
+    ) {
+      notes.push(
+        rewrite.fallback === true ? `[rtk] fell back: ${rewrite.from}` : `[rtk] ran: ${rewrite.to}`,
+      )
+    }
+    // rtk's own note (converted Read output) travels first: the model must see
+    // it before it considers the body authoritative.
+    if (compressed?.note !== undefined) notes.push(`[rtk] ${compressed.note}`)
+    if (compressed !== null && text !== undefined && config.spillOriginal !== 'off') {
+      const offeredRecall = compressed.text.includes('rtk recall')
+      const hint = await options.spillOf?.(exec, text, offeredRecall)
+      if (hint !== undefined) notes.push(hint)
+    }
+    if (notes.length === 0 && compressed === null) return undefined
 
-    // Unreadable content (images, mixed blocks): prepend the annotation as its
-    // own block rather than pretending the rest is text.
+    // Unreadable content (images, mixed blocks): prepend the notes as their own
+    // block rather than pretending the rest is text.
     if (body === undefined) {
-      return annotation === undefined ? undefined : [{ type: 'text', text: annotation }, ...content]
+      return notes.length === 0 ? undefined : [{ type: 'text', text: notes.join('\n') }, ...content]
     }
 
-    return [{ type: 'text', text: annotation === undefined ? body : `${annotation}\n${body}` }]
+    return [{ type: 'text', text: notes.length === 0 ? body : `${notes.join('\n')}\n${body}` }]
   }
 
   return {

@@ -65,8 +65,20 @@ export function buildPostToolUsePayload(
   return JSON.stringify(payload)
 }
 
-/** The text rtk put back, per shape. `null` when the response is not the documented one. */
-export function extractUpdatedText(shape: ResultShape, stdout: string): string | null {
+/** What one hook response carries: the rewritten text and any model-facing note. */
+export interface HookOutput {
+  readonly text: string
+  /**
+   * `hookSpecificOutput.additionalContext`. rtk sets it when it *converted* a
+   * Read output (json→toon, lockfile summary), warning that the on-disk file
+   * no longer matches the text — using the converted body as an `old_string`
+   * would produce a failed edit.
+   */
+  readonly note?: string
+}
+
+/** One parsed hook response; `null` when the payload is not the documented shape. */
+export function extractHookOutput(shape: ResultShape, stdout: string): HookOutput | null {
   const trimmed = stdout.trim()
   if (trimmed === '') return null
   let parsed: unknown
@@ -78,14 +90,30 @@ export function extractUpdatedText(shape: ResultShape, stdout: string): string |
   const hook = (parsed as { hookSpecificOutput?: Record<string, unknown> })?.hookSpecificOutput
   const updated = hook?.updatedToolOutput as Record<string, unknown> | undefined
   if (updated === undefined || updated === null) return null
+
+  let text: string | null
   if (shape === 'read') {
     const file = updated.file as { content?: unknown } | undefined
-    return typeof file?.content === 'string' ? file.content : null
+    text = typeof file?.content === 'string' ? file.content : null
+  } else {
+    const out = updated.stdout
+    if (typeof out !== 'string') {
+      text = null
+    } else {
+      const err = typeof updated.stderr === 'string' ? updated.stderr : ''
+      text = err === '' ? out : `${out}\n${err}`
+    }
   }
-  const out = updated.stdout
-  if (typeof out !== 'string') return null
-  const err = typeof updated.stderr === 'string' ? updated.stderr : ''
-  return err === '' ? out : `${out}\n${err}`
+  if (text === null) return null
+
+  const rawNote = hook?.additionalContext
+  const note = typeof rawNote === 'string' && rawNote.trim() !== '' ? rawNote.trim() : undefined
+  return note === undefined ? { text } : { text, note }
+}
+
+/** The text rtk put back, per shape. `null` when the response is not the documented one. */
+export function extractUpdatedText(shape: ResultShape, stdout: string): string | null {
+  return extractHookOutput(shape, stdout)?.text ?? null
 }
 
 /**
@@ -110,7 +138,7 @@ export async function compressWithRtk(options: {
    * attributable to the project the user is actually working in.
    */
   readonly cwd?: string
-}): Promise<string | null> {
+}): Promise<HookOutput | null> {
   const payload = buildPostToolUsePayload(options.shape, options.command, options.path, options.text)
   const run = await runRtk(options.binary, ['hook', 'claude'], {
     input: payload,
@@ -121,10 +149,10 @@ export async function compressWithRtk(options: {
     ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
   })
   if (run.failure !== undefined || run.code !== 0) return null
-  const updated = extractUpdatedText(options.shape, run.stdout)
+  const updated = extractHookOutput(options.shape, run.stdout)
   if (updated === null) return null
   // Defensive: rtk already refuses to emit a non-improvement (`never_worse`),
   // but a future rule could still hand back something larger than the input.
-  if (updated.length >= options.text.length) return null
+  if (updated.text.length >= options.text.length) return null
   return updated
 }
