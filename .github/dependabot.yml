@@ -1,0 +1,13 @@
+# Keep the SHA-pinned CI actions current. Dependabot updates the commit SHA
+# and keeps the human version comment next to it, so a moving major tag can
+# never change what runs without a reviewable PR.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    labels:
+      - dependencies
