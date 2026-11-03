@@ -53,6 +53,7 @@ Every key can be overridden from `cordis.patch.yml`; values are validated at loa
 | `rewriteEnabled` | `true` | Master switch for rewriting |
 | `rewriteFallback` | `retry` | Replay the original command when rtk itself failed (rtk failure signatures only) |
 | `rewriteSandboxGuard` | `auto` | Windows + confined sandbox skips rewrites (see `help sandbox`); `off` forces them |
+| `rewriteSemanticGuard` | `enforce` | Verify the proposal still runs the original command; `off` trusts rtk's stdout (rtk 1.1.0 maps `next build` to `rtk next`) |
 | `shellTools` | `['bash','pwsh']` | Names treated as shells for detection |
 | `rewriteTools` | `['bash','ops_bash','pwsh']` | Tools eligible for rewriting; `discoverShellTools` also accepts shell-like names |
 | `rewriteExcludeCommands` | `['cat','type','bat','less','more','head','tail']` | Command words never rewritten |
@@ -119,6 +120,18 @@ The matrix describes the plugin's *observable* behaviour. "skipped" always means
 
 **Coexistence.** Shell tools republished under another name (e.g. an `ops_` prefix) are recognised through the alias table and `discoverShellTools`; rewriting calls the tool's own `execute`, so the owning plugin's sandboxing still applies. The compression listener always awaits `next()` first, then transforms the content the downstream decision carries; when another transformer replaced it, `/rtk status` reports `observed: another result transformer changed N result(s)` without naming the plugin. If another plugin keeps replacing our `execute` wrapper, the plugin stops re-wrapping after three attempts and reports it under `skipped`. Results already replaced by the host spill policy carry a marker and are not compressed again. `RTK_CONFIG_DIR` is only set for the plugin's own spawns (and only in `plugin-owned`/`auto`); the user's `config.toml` and `filters.toml` are never overridden.
 
+**Co-installation matrix.** "Cannot" means both plugins claim the same host seam and only one can be active.
+
+| Co-installed plugin | Result | What to do |
+|---|---|---|
+| Shell-executor replacements (`dsh-rtk`, `dsh-bash-rtk`, `dsh-pwsh-rtk-rewrite`) | Cannot coexist: each replaces `ctx.shell`, which the host allows once per context | Pick one; disable the others |
+| `dsh-rtk-bridge` (also wraps `execute`) | Both try to own the wrapper; one stops re-wrapping after three attempts and reports `skipped` | Prefer one rewriter; check `/rtk status` |
+| `dsh-router-ext-rtk` (short-circuits `tools/execute`) | Its rewrite runs first; this plugin sees an `rtk` prefix, skips rewriting, and still compresses the result | Safe, single rewrite |
+| `dsh-token-saver` (trims in `tools/post-execute`) | Safe: its trimming markers are recognised and this layer leaves the text alone | No double trimming |
+| `billion-context` (folds old dialogue, ACP markers) | Safe: ACP-marked content is skipped | None |
+
+**Semantic guard.** Before executing a proposal, the plugin checks that every rewritten segment still carries the original command: a plain prefix (`git status` → `rtk git status`), a `gradle` → `gradlew` mapping, or a `read` mapping whose path and line window survive. A proposal that dropped a token — rtk 1.1.0 turns `next build` into `rtk next` and `python -m pytest` into `rtk pytest` — is refused, the original command runs, and the call is counted under `guard` in `/rtk stats`. `/rtk explain <command>` shows the verdict for one command. Rejected rewrites still get post-execute compression on their output.
+
 **Version policy.** Platform subpackages share the main package's version and record the bundled rtk version; a DSH upgrade re-runs the compatibility check against the new tag before release. The reference rtk source is the release tag matching the bundled binary (`release-v1.1.0`), never `develop`.
 
 ## 7. Troubleshooting
@@ -131,6 +144,7 @@ The matrix describes the plugin's *observable* behaviour. "skipped" always means
 | A command fails unexpectedly | rtk could not spawn the real command | The sandbox guard already skips these; turn `rewriteSandboxGuard` back on |
 | `rtk recall` reports a store error | Sandboxed shell | Ask the user for `/rtk recall`, or read the spill path |
 | One verb keeps failing | The environment cannot run it | It is tripped; see the `learned` line |
+| A rewritten command looks like a different command | rtk's proposal dropped an argument (`next build` → `rtk next`) | The semantic guard runs the original; see `guard` in `/rtk stats` and `/rtk explain <cmd>` |
 | Results look changed by someone else | Another result transformer | The `observed` line; compare with `/rtk off compress` |
 
 ## 8. Known limitations (host differences, not missing work)

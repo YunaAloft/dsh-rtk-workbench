@@ -26,6 +26,8 @@ export interface RewriteCounters {
   readonly calls: number
   readonly fallbacks: number
   readonly learned: readonly string[]
+  /** Proposals rejected because they no longer ran the original command. */
+  readonly guards?: number
 }
 
 function emptyStats(): SessionStats {
@@ -134,6 +136,9 @@ export function createStats() {
     if (counters.learned.length > 0) {
       lines.push(`learned    : rewrite suppressed for ${counters.learned.join(', ')}`)
     }
+    if ((counters.guards ?? 0) > 0) {
+      lines.push(`guard      : ${String(counters.guards)} rewrite(s) rejected as unsafe (original ran)`)
+    }
     return lines
   }
 
@@ -146,6 +151,7 @@ export function createStats() {
       `session    : ${key}`,
       `compress   : ${String(stats.compressions)} calls, ${formatBytes(stats.inBytes)} → ${formatBytes(stats.outBytes)} (-${String(pct)}%, ~${String(estimateTokens(saved))} tok), ${(stats.compressMs / 1000).toFixed(1)} s`,
       `rewrite    : ${String(counters.calls)} calls, ${String(counters.fallbacks)} fallback${counters.learned.length === 0 ? '' : `, learned ${counters.learned.join(', ')}`}`,
+      `guard      : ${String(counters.guards ?? 0)} rejected as unsafe`,
       `skipped    : ${Object.entries(stats.skipped).map(([reason, count]) => `${reason} ${String(count)}`).join(', ')}`,
       `errors     : rtk ${String(stats.errors.rtk)}, timeout ${String(stats.errors.timeout)}`,
     ]
@@ -175,7 +181,12 @@ export function createStats() {
           ms: Math.round(stats.compressMs),
           byTool: Object.fromEntries(stats.byTool),
         },
-        rewrite: { calls: counters.calls, fallbacks: counters.fallbacks, learned: counters.learned },
+        rewrite: {
+          calls: counters.calls,
+          fallbacks: counters.fallbacks,
+          learned: counters.learned,
+          guards: counters.guards ?? 0,
+        },
         skipped: stats.skipped,
         errors: stats.errors,
       },

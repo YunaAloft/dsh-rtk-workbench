@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createCompressLayer } from '../src/compress-layer'
 import type { Config } from '../src/config'
 import { createRewriteLayer } from '../src/rewrite-layer'
@@ -13,6 +13,7 @@ function baseConfig(overrides: Partial<Config> = {}): Config {
     rewriteEnabled: true,
     rewriteFallback: 'retry',
     rewriteSandboxGuard: 'auto',
+    rewriteSemanticGuard: 'enforce',
     shellTools: ['bash', 'pwsh'],
     rewriteTools: ['bash', 'ops_bash', 'pwsh'],
     rewriteExcludeCommands: ['cat', 'type', 'bat', 'less', 'more', 'head', 'tail'],
@@ -202,5 +203,58 @@ describe('compression layer', () => {
     const result = { isError: false, content: [{ type: 'text', text: 'x'.repeat(4096) }] } as never
     const next = async (): Promise<never> => ({ kind: 'accept' }) as never
     expect(await layer.listener(subCall, result, next, () => ({ from: 'a', to: 'rtk a' }))).toEqual({ kind: 'accept' })
+  })
+})
+
+describe('semantic guard in the rewrite layer', () => {
+  /** A runner that claims every command rewrites to the given proposal. */
+  function proposalRunner(target: string) {
+    return vi.fn(async () => ({ code: 3, stdout: target, stderr: '' })) as never
+  }
+
+  it('runs the original command when the proposal dropped an argument, and counts it', async () => {
+    const seen: string[] = []
+    const definition = makeDefinition('bash', async (args: { command: string }) => {
+      seen.push(args.command)
+      return 'ok'
+    })
+    const ctx = fakeCtx(new Map([['bash', definition]]))
+    const layer = createRewriteLayer({
+      ctx,
+      binary: 'rtk',
+      timeoutMs: 100,
+      env: {},
+      run: proposalRunner('rtk next'),
+    })
+    layer.ensurePatched('bash', undefined)
+
+    await invoke(definition, { command: 'next build' })
+    await invoke(definition, { command: 'next build' })
+    expect(seen).toEqual(['next build', 'next build'])
+    expect(layer.guardCount()).toBe(2)
+    expect(layer.rewriteCount()).toBe(0)
+    layer.dispose()
+  })
+
+  it('honours semanticGuard: false as the escape hatch', async () => {
+    const seen: string[] = []
+    const definition = makeDefinition('bash', async (args: { command: string }) => {
+      seen.push(args.command)
+      return 'ok'
+    })
+    const ctx = fakeCtx(new Map([['bash', definition]]))
+    const layer = createRewriteLayer({
+      ctx,
+      binary: 'rtk',
+      timeoutMs: 100,
+      env: {},
+      semanticGuard: false,
+      run: proposalRunner('rtk next'),
+    })
+    layer.ensurePatched('bash', undefined)
+    await invoke(definition, { command: 'next build' })
+    expect(seen).toEqual(['rtk next'])
+    expect(layer.rewriteCount()).toBe(1)
+    layer.dispose()
   })
 })

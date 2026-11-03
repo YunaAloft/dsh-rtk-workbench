@@ -8,8 +8,15 @@ import { commandOf, decideTool, pathOf, patternOf } from './toolmap'
 type AcceptDecision = Extract<PostToolDecision, { kind: 'accept' }>
 type Blocks = NonNullable<AcceptDecision['content']>
 
-/** Content that already shows a compression (or another plugin's) mark. */
-const ALREADY_MARKED = /\[rtk\b|\[ACP\b|\[x\d+\]|\(\d+ filtered\)|\[spill\b|rtk recall [0-9a-f]{6,}/i
+/**
+ * Content that already shows a compression (or another plugin's) mark.
+ *
+ * `content trimmed to save tokens` / `full diff: rtk` / `head and tail
+ * preserved` are dsh-token-saver's markers: co-installing it would otherwise
+ * let this layer trim already-trimmed text a second time.
+ */
+const ALREADY_MARKED =
+  /\[rtk\b|\[ACP\b|\[x\d+\]|\(\d+ filtered\)|\[spill\b|rtk recall [0-9a-f]{6,}|content trimmed to save tokens|full diff: rtk|head and tail preserved/i
 
 /** Everything the compression layer needs from the surrounding plugin. */
 export interface CompressLayerOptions {

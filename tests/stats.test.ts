@@ -20,13 +20,14 @@ describe('session stats', () => {
     stats.recordCompress(call('s1'), 10_000, 2_000, 500)
     stats.recordCompress(call('s1'), 4_000, 4_000, 100)
     stats.recordSkipped(call('s1'), 'size')
-    const lines = stats.formatLines('s1', { calls: 2, fallbacks: 1, learned: ['ls'] })
+    const lines = stats.formatLines('s1', { calls: 2, fallbacks: 1, learned: ['ls'], guards: 3 })
     expect(lines[0]).toContain('2 compressions')
     expect(lines[0]).toContain('-57%')
     expect(lines[0]).toContain('2 rewrites')
     expect(lines[0]).toContain('1 fallback')
     expect(lines.join('\n')).toContain('skipped    : size 1')
     expect(lines.join('\n')).toContain('learned    : rewrite suppressed for ls')
+    expect(lines.join('\n')).toContain('guard      : 3 rewrite(s) rejected')
   })
 
   it('keeps sessions separate and empty ones silent', () => {
@@ -50,14 +51,15 @@ describe('session stats', () => {
     const stats = createStats()
     stats.recordCompress(call('s1'), 1000, 400, 5)
     stats.recordError(call('s1'), 'rtk')
-    const parsed = JSON.parse(stats.toJson('s1', { calls: 3, fallbacks: 0, learned: [] })) as {
+    const parsed = JSON.parse(stats.toJson('s1', { calls: 3, fallbacks: 0, learned: [], guards: 2 })) as {
       compress: { calls: number; savedBytes: number }
-      rewrite: { calls: number }
+      rewrite: { calls: number; guards: number }
       errors: { rtk: number }
     }
     expect(parsed.compress.calls).toBe(1)
     expect(parsed.compress.savedBytes).toBe(600)
     expect(parsed.rewrite.calls).toBe(3)
+    expect(parsed.rewrite.guards).toBe(2)
     expect(parsed.errors.rtk).toBe(1)
   })
 })

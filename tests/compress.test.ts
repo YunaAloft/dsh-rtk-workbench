@@ -13,6 +13,7 @@ function baseConfig(overrides: Partial<Config> = {}): Config {
     rewriteEnabled: true,
     rewriteFallback: 'retry',
     rewriteSandboxGuard: 'auto',
+    rewriteSemanticGuard: 'enforce',
     shellTools: ['bash', 'pwsh'],
     rewriteTools: ['bash', 'ops_bash', 'pwsh'],
     rewriteExcludeCommands: ['cat', 'type', 'bat', 'less', 'more', 'head', 'tail'],
@@ -168,5 +169,25 @@ describe('compression notes and spill', () => {
       fallback: true,
     })
     expect(text?.startsWith('[rtk] fell back: ls -la\n')).toBe(true)
+  })
+
+  it('leaves output another compressor already marked alone', async () => {
+    for (const marker of [
+      'content trimmed to save tokens: 1200 bytes omitted',
+      '[full diff: rtk git diff]',
+      'to save tokens; head and tail preserved',
+    ]) {
+      const compress = fakeRoundTrip('should not run')
+      const skipped = vi.fn()
+      const layer = makeLayer(baseConfig(), { compress, onSkipped: skipped })
+      const text = await runOnce(
+        layer,
+        { name: 'bash', arguments: { command: 'git log' } },
+        `${marker}\n${'line\n'.repeat(600)}`,
+      )
+      expect(text, marker).toBeUndefined()
+      expect(compress, marker).not.toHaveBeenCalled()
+      expect(skipped, marker).toHaveBeenCalledWith(expect.anything(), 'marked')
+    }
   })
 })

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createCommandHandler } from '../src/commands'
 import type { Config } from '../src/config'
 
@@ -12,6 +12,7 @@ function baseConfig(): Config {
     rewriteEnabled: true,
     rewriteFallback: 'retry',
     rewriteSandboxGuard: 'auto',
+    rewriteSemanticGuard: 'enforce',
     shellTools: ['bash', 'pwsh'],
     rewriteTools: ['bash', 'ops_bash', 'pwsh'],
     rewriteExcludeCommands: ['cat'],
@@ -137,5 +138,18 @@ describe('/rtk command handler', () => {
     const outcome = await handler.handle({ rawInput: 'status', agent: {} })
     const text = outcome.kind === 'success' ? (outcome.text ?? '') : ''
     expect(text).toContain('the injected pipeline is not active')
+  })
+
+  it('shows the semantic guard verdict in explain', async () => {
+    const run = vi.fn(async (_binary: string, args: readonly string[]) =>
+      args[0] === 'hook'
+        ? { code: 0, stdout: 'rtk next\n', stderr: '' }
+        : { code: 0, stdout: 'ok', stderr: '' },
+    )
+    const handler = makeHandler(baseConfig(), { run })
+    const outcome = await handler.handle({ rawInput: 'explain next build', agent: {} })
+    const text = outcome.kind === 'success' ? (outcome.text ?? '') : ''
+    expect(text).toContain('would rewrite to: rtk next')
+    expect(text).toContain('guard: reject — tokens-dropped')
   })
 })

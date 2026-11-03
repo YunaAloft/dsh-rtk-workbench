@@ -276,6 +276,7 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
       }),
     retryOnRtkFailure: config.rewriteFallback === 'retry',
     cacheTtlMs: config.rewriteCacheTtlMs,
+    semanticGuard: config.rewriteSemanticGuard === 'enforce',
     onRtkFailure: (exec) => stats.recordError(exec, 'rtk'),
     onTimeout: (exec) => stats.recordError(exec, 'timeout'),
   })
@@ -405,6 +406,7 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
           calls: rewrites.rewriteCount(),
           fallbacks: rewrites.fallbackCount(),
           learned: rewrites.learnedList(),
+          guards: rewrites.guardCount(),
         }
         return {
           lines: stats.formatLines(key, counters),
@@ -417,6 +419,7 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
         calls: rewrites.rewriteCount(),
         fallbacks: rewrites.fallbackCount(),
         learned: rewrites.learnedList(),
+        guards: rewrites.guardCount(),
       }),
       foreignTransforms: () => foreignTransforms,
       capability: () => ({ state: capability.state, detail: capability.detail }),

@@ -15,6 +15,7 @@ function baseConfig(overrides: Partial<Config> = {}): Config {
     rewriteEnabled: true,
     rewriteFallback: 'retry',
     rewriteSandboxGuard: 'auto',
+    rewriteSemanticGuard: 'enforce',
     shellTools: ['bash', 'pwsh'],
     rewriteTools: ['bash', 'ops_bash', 'pwsh'],
     rewriteExcludeCommands: ['cat', 'type', 'bat', 'less', 'more', 'head', 'tail'],

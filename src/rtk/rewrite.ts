@@ -1,4 +1,8 @@
 import type { Dialect } from '../toolmap'
+import { splitSegments } from './segments'
+import { verifyRewrite } from './verify'
+
+export { splitSegments } from './segments'
 
 /** rtk `rewrite` exit-code semantics, verified from `src/hooks/rewrite_cmd.rs:73-123`. */
 export const REWRITE_ALLOW = 0
@@ -9,7 +13,7 @@ export const REWRITE_ASK = 3
 /** What one `rtk rewrite` call decided. */
 export type RewriteOutcome =
   | { readonly kind: 'rewrite'; readonly command: string }
-  | { readonly kind: 'none'; readonly reason: 'no-equivalent' | 'denied' | 'empty' | 'unsafe' }
+  | { readonly kind: 'none'; readonly reason: 'no-equivalent' | 'denied' | 'empty' | 'unsafe' | 'guard' }
 
 /** Operators whose appearance in a rewrite that the original lacked is treated as unsafe. */
 const CONTROL_OPERATORS = [';', '&&', '||', '|', '$(', '`', '>>', '<<'] as const
@@ -91,16 +95,20 @@ export function absolutizeRtk(command: string, binary: string, dialect: Dialect 
 /**
  * Decide whether a `rtk rewrite` result may be executed.
  *
- * The three cheap guards exist because the proposed command is data produced by
- * an external binary: executing it unchecked would outsource "what runs" to
- * that binary. All three reject to the untouched original command.
+ * The cheap guards exist because the proposed command is data produced by an
+ * external binary: executing it unchecked would outsource "what runs" to that
+ * binary. The semantic guard goes one step further and checks that the proposal
+ * still runs the *same* command — rtk 1.1.0 drops arguments in some mappings
+ * (`next build` → `rtk next`), which the shape checks cannot see.
  *
  * @param original - command the model asked for.
  * @param run - raw rtk invocation outcome (`null` = timed out / aborted).
+ * @param options - `semanticGuard: false` disables the token-preservation check.
  */
 export function decideRewrite(
   original: string,
   run: { readonly code: number | null; readonly stdout: string } | null,
+  options: { readonly semanticGuard?: boolean } = {},
 ): RewriteOutcome {
   if (run === null) return { kind: 'none', reason: 'no-equivalent' }
   const { code, stdout } = run
@@ -116,6 +124,9 @@ export function decideRewrite(
   if (!hasRtkSegment(candidate)) return { kind: 'none', reason: 'unsafe' }
   if (introducesNewOperators(original, candidate)) return { kind: 'none', reason: 'unsafe' }
   if (candidate.length > Math.max(4096, original.length * 8)) return { kind: 'none', reason: 'unsafe' }
+  if (options.semanticGuard !== false && !verifyRewrite(original, candidate).ok) {
+    return { kind: 'none', reason: 'guard' }
+  }
   return { kind: 'rewrite', command: candidate }
 }
 
@@ -162,14 +173,6 @@ const BUILTIN_ONLY = new Set([
   ':',
   'pwd',
 ])
-
-/** Split a command line into top-level segments on `&&`, `||`, `;`, `|`, newline. */
-export function splitSegments(command: string): string[] {
-  return command
-    .split(/&&|\|\||[;|\n]/)
-    .map((segment) => segment.trim())
-    .filter((segment) => segment !== '')
-}
 
 /**
  * Cheap pre-filter, mirroring the rule the mature community implementations use:

@@ -54,6 +54,12 @@ export interface RewriteLayerOptions {
   readonly onTimeout?: (exec: ToolRunContext) => void
   /** How long one rewrite answer is reused; 0 disables the cache. */
   readonly cacheTtlMs?: number
+  /**
+   * Verify that a proposal still runs the original command (token preservation).
+   * Defaults to `true`; `false` is an escape hatch for a future rtk whose
+   * legitimate transforms the guard cannot prove.
+   */
+  readonly semanticGuard?: boolean
   /** Injectable runner, so unit tests can simulate rtk failures without a binary. */
   readonly run?: typeof runRtk
 }
@@ -114,6 +120,8 @@ export function createRewriteLayer(options: RewriteLayerOptions) {
   const restores: Array<() => void> = []
   /** Verbs whose rewritten form failed at rtk's own layer; never rewritten again this session. */
   const learned = new Set<string>()
+  /** Proposals rejected because they no longer ran the original command. */
+  let guards = 0
   let fallbacks = 0
   let rewrites = 0
 
@@ -214,7 +222,6 @@ export function createRewriteLayer(options: RewriteLayerOptions) {
       const cwd = options.cwdOf?.(exec)
       const cacheKey = `${cwd ?? ''}\u0000${command}`
       const cached = readCache(cacheKey)
-      if (cached !== undefined && cached.kind === 'none') return await original.call(owner, args, exec)
       let outcome: RewriteOutcome | undefined = cached
       if (outcome === undefined) {
         const run = await runner(binary, ['rewrite', command], {
@@ -225,10 +232,17 @@ export function createRewriteLayer(options: RewriteLayerOptions) {
           ...(cwd === undefined ? {} : { cwd }),
         })
         if (run.failure?.kind === 'timeout') options.onTimeout?.(exec)
-        outcome = decideRewrite(command, run.failure === undefined ? run : null)
+        outcome = decideRewrite(command, run.failure === undefined ? run : null, {
+          semanticGuard: options.semanticGuard !== false,
+        })
         writeCache(cacheKey, outcome)
       }
-      if (outcome.kind !== 'rewrite') return await original.call(owner, args, exec)
+      if (outcome.kind !== 'rewrite') {
+        // A cached rejection still counts: the caller asked for a rewrite and the
+        // guard refused it, which is exactly what /rtk stats reports.
+        if (outcome.reason === 'guard') guards += 1
+        return await original.call(owner, args, exec)
+      }
       // rtk answers with a bare `rtk …`; a bundled-only install has no such PATH
       // entry, so run the binary this plugin resolved.
       const target = absolutizeRtk(outcome.command, binary, dialect)
@@ -316,6 +330,11 @@ export function createRewriteLayer(options: RewriteLayerOptions) {
     return fallbacks
   }
 
+  /** How many proposals the semantic guard rejected (original command ran). */
+  function guardCount(): number {
+    return guards
+  }
+
   /** How many rewritten commands were dispatched. */
   function rewriteCount(): number {
     return rewrites
@@ -329,6 +348,7 @@ export function createRewriteLayer(options: RewriteLayerOptions) {
     skippedList,
     learnedList,
     fallbackCount,
+    guardCount,
     rewriteCount,
   }
 }

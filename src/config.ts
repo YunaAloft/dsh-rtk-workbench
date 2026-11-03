@@ -38,6 +38,12 @@ export interface Config {
    * the real command. `off` forces rewriting even there.
    */
   rewriteSandboxGuard: 'auto' | 'off'
+  /**
+   * Verify that rtk's proposal still runs the original command before executing
+   * it. `enforce` rejects proposals that dropped tokens (rtk 1.1.0 maps
+   * `next build` to `rtk next`); `off` trusts rtk's stdout as-is.
+   */
+  rewriteSemanticGuard: 'enforce' | 'off'
   /** Tool names treated as shells for detection (official names first). */
   shellTools: string[]
   /** Tool names eligible for rewriting (POSIX shells only by default). */
@@ -128,6 +134,11 @@ export const Config: Schema<Config> = Schema.object({
     .default('auto')
     .description(
       'Windows only: skip rewriting while the session sandbox confines child processes (workspace-write / read-only).',
+    ),
+  rewriteSemanticGuard: Schema.union(['enforce', 'off'])
+    .default('enforce')
+    .description(
+      'Verify that rtk’s proposal still runs the original command; rejects argument-dropping rewrites (rtk 1.1.0 turns `next build` into `rtk next`).',
     ),
   shellTools: Schema.array(Schema.string())
     .default(['bash', 'pwsh'])

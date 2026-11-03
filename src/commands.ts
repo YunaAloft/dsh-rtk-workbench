@@ -2,6 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Config } from './config'
 import { describeRun, runRtk } from './rtk/exec'
 import { isWorthRewriting, verbOf } from './rtk/rewrite'
+import { verifyRewrite } from './rtk/verify'
 import { AWARENESS_SECTION_NAME } from './awareness'
 import { decideTool, dialectOf } from './toolmap'
 import type { RewriteCounters } from './stats'
@@ -104,7 +105,8 @@ export const HELP_TOPICS: Readonly<Record<string, string>> = {
     'config — where knobs live',
     "  Every key is in cordis.patch.yml; defaults are in the plugin's Schema.",
     '  Most useful: rewriteEnabled, compressEnabled, pipelineMode, rewriteSandboxGuard,',
-    '  compressThresholdBytes / compressThresholdByFamily, spillOriginal, annotateStyle.',
+    '  rewriteSemanticGuard, compressThresholdBytes / compressThresholdByFamily, spillOriginal,',
+    '  annotateStyle.',
     '  The full table is in docs/reference.md.',
   ].join('\n'),
 }
@@ -171,6 +173,7 @@ export function createCommandHandler(context: CommandContext) {
       `recall     : ${await recallState()}`,
       `pipeline   : ${pipeline.mode}${pipeline.dir === '' ? '' : ` (${pipeline.dir})`}  ${pipelineLine}`,
       `rewrite    : ${flag(config.rewriteEnabled)}   tools: ${config.rewriteTools.join(', ')}`,
+      `guard      : ${config.rewriteSemanticGuard}   (rejects rewrites that drop arguments)`,
       `compress   : ${flag(config.compressEnabled)}   threshold: ${String(config.compressThresholdBytes)} B`,
       `awareness  : ${flag(config.awarenessEnabled)}   section: ${AWARENESS_SECTION_NAME}`,
       `deny       : ${flag(config.denyEnabled)}`,
@@ -354,8 +357,16 @@ export function createCommandHandler(context: CommandContext) {
     })
     let note: string
     if (check.failure !== undefined) note = describeRun(check)
-    else if (check.code === 0) note = `would rewrite to: ${check.stdout.trim()}`
-    else {
+    else if (check.code === 0) {
+      const proposal = check.stdout.trim()
+      const guard =
+        config.rewriteSemanticGuard === 'enforce' && proposal !== ''
+          ? verifyRewrite(command, proposal)
+          : undefined
+      const suffix =
+        guard === undefined ? '' : guard.ok ? ' (guard: accept)' : ` (guard: reject — ${guard.reason})`
+      note = `would rewrite to: ${proposal}${suffix}`
+    } else {
       const first = (check.stderr || check.stdout).trim().split('\n')[0] ?? ''
       note = first === '' ? describeRun(check) : first
     }

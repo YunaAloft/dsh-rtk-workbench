@@ -53,6 +53,7 @@ learned    : rewrite suppressed for ls
 | `rewriteEnabled` | `true` | 改写总开关 |
 | `rewriteFallback` | `retry` | rtk 自身失败时是否重放原命令（只认 rtk 的失败签名） |
 | `rewriteSandboxGuard` | `auto` | Windows 受限沙箱下跳过改写（见 `help sandbox`）；`off` 强制 |
+| `rewriteSemanticGuard` | `enforce` | 校验改写结果仍在执行原命令；`off` 直接信任 rtk 的输出（rtk 1.1.0 会把 `next build` 改成 `rtk next`） |
 | `shellTools` | `['bash','pwsh']` | 用于识别的 shell 名 |
 | `rewriteTools` | `['bash','ops_bash','pwsh']` | 允许改写的工具名；`discoverShellTools` 打开时额外识别 shell 风格名字 |
 | `rewriteExcludeCommands` | `['cat','type','bat','less','more','head','tail']` | 永远不改写的命令词 |
@@ -118,6 +119,18 @@ learned    : rewrite suppressed for ls
 
 **共存。** 以别名重新发布的 shell 工具（如 `ops_` 前缀）通过别名表与 `discoverShellTools` 识别；改写调用工具自己的 `execute`，所以其宿主的沙箱语义仍然生效。压缩监听器永远先 `await next()`，再变换下游决策携带的内容；别的变换器改过内容时，`/rtk status` 会显示 `observed: another result transformer changed N result(s)`，不点名插件。若别的插件持续替换我们的 `execute` 包装，插件在三次之后停止重包并在 `skipped` 里说明。已被宿主 spill 策略替换的结果带标记，不会被再次压缩。`RTK_CONFIG_DIR` 只给插件自己的 spawn 设置（且只在 `plugin-owned`/`auto` 下），用户的 `config.toml` 与 `filters.toml` 从不被覆盖。
 
+**共存矩阵。** "不可"表示两者抢同一个宿主缝，同一时刻只能有一个生效。
+
+| 同装插件 | 结果 | 处理 |
+|---|---|---|
+| 执行器替换类（`dsh-rtk`、`dsh-bash-rtk`、`dsh-pwsh-rtk-rewrite`） | **不可同装**：都替换 `ctx.shell`，宿主每个 context 只允许一个实现 | 只选一个，其余禁用 |
+| `dsh-rtk-bridge`（也包装 `execute`） | 两者争同一个包装；其中一方在三次重包后停止并在 `skipped` 里说明 | 只留一个改写器；看 `/rtk status` |
+| `dsh-router-ext-rtk`（短路 `tools/execute`） | 它先改写；本插件看到 `rtk` 前缀就跳过改写，压缩照常 | 安全，只会改写一次 |
+| `dsh-token-saver`（在 `tools/post-execute` 裁剪） | 安全：它的裁剪标记会被识别，本层不再动那段文本 | 不会二次裁剪 |
+| `billion-context`（折叠旧对话、ACP 标记） | 安全：带 ACP 标记的内容直接跳过 | 无需处理 |
+
+**语义守卫。** 执行改写结果前，插件逐段确认它仍在执行原命令：普通前缀（`git status` → `rtk git status`）、`gradle` → `gradlew` 映射、或路径与行数都保留的 `read` 映射。任何丢了参数的提案——rtk 1.1.0 会把 `next build` 变成 `rtk next`、把 `python -m pytest` 变成 `rtk pytest`——会被拒绝，原命令照跑，并在 `/rtk stats` 的 `guard` 计数里体现。`/rtk explain <命令>` 会给出单条命令的判定。被拒的改写仍会照常走 post-execute 压缩。
+
 **版本策略。** 平台子包与主包同版本并记录内置 rtk 版本；DSH 升级后按新 tag 重跑兼容检查再发版。rtk 的参考源码用与内置二进制一致的发布 tag（`release-v1.1.0`），不用 `develop`。
 
 ## 7. 故障排查
@@ -130,6 +143,7 @@ learned    : rewrite suppressed for ls
 | 命令莫名失败 | rtk 派生子进程被拒（沙箱） | `rewriteSandboxGuard` 默认已抑制；若强制打开则关掉 |
 | `rtk recall` 报 store 错误 | shell 被沙箱隔离 | 让用户 `/rtk recall`，或读 spill 路径 |
 | 一个动词反复失败 | 运行环境跑不了该动词 | 已被熔断；`status` 的 `learned` 行确认 |
+| 改写后像是另一条命令 | rtk 的提案丢了参数（`next build` → `rtk next`） | 语义守卫会跑原命令；看 `/rtk stats` 的 `guard` 与 `/rtk explain <命令>` |
 | 结果被别的插件改过 | 另一个结果变换器在跑 | `status` 的 `observed` 行；`/rtk off compress` 对比 |
 
 ## 8. 已知限制（宿主差异，不是实现缺陷）
@@ -150,3 +164,4 @@ learned    : rewrite suppressed for ls
 - 压缩范围按调用形状决定（文件/搜索不动）；rtk recall 不可达时把原文落盘。
 - 会话计数只在内存：回答"本插件本会话做了什么"，不替代 rtk 的全局库。
 - Windows 受限沙箱直接跳过改写（rtk 无法派生子进程），压缩不受影响。
+- 改写结果先过语义守卫：只接受前缀、`gradle→gradlew` 与参数保留的 `read` 映射，其余退回原命令。
