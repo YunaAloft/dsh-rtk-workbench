@@ -35,6 +35,7 @@ agent 各自实现了适配层（Claude Code 是一个 `PreToolUse` hook），�
 | 能力 | 默认 | 实现方式 |
 |---|---|---|
 | **命令改写** | 开 | 包装 `ToolDefinition.execute`；`git status` 以 `rtk git status` 执行，超过 500 B 的结果首行是 `[rtk] ran: rtk git status`；rtk 跑不起来时重放原命令并标注 `[rtk] fell back:` |
+| **语义守卫** | 开 | 校验 rtk 的提案仍在执行原命令；丢参数的提案（rtk 1.1.0 会把 `next build` 改成 `rtk next`）会被拒绝并改跑原命令 |
 | **输出压缩** | 开（≥ 2048 B） | 在 `tools/post-execute` 里用合成的 PostToolUse 事件调 `rtk hook claude`；文件/搜索结果默认跳过，小的测试/构建输出用按命令族阈值 |
 | **恢复** | 开 | 保留 rtk 的 `rtk recall <hash>` 提示；沙箱够不到 rtk 库时，原文落到会话私有存储并在结果里给出路径 |
 | **会话可见性** | 开 | `/rtk status` 追加本会话省量与跳过原因；`/rtk stats [--json]` 是完整报告 |
@@ -116,6 +117,8 @@ flowchart LR
 ## Documentation
 
 - [参考手册](./docs/reference.zh.md) —— 命令、配置、恢复、兼容矩阵、排障、设计说明。
+- [兼容性台账](./docs/compatibility.zh.md) —— 已验证宿主、声明的版本范围、`verify-host` 脚本。
+- [变更记录](./CHANGELOG.md) —— 每个版本改了什么。
 - [Reference manual (English)](./docs/reference.md)。
 
 ## Development

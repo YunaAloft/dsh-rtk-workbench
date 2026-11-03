@@ -38,6 +38,7 @@ it would without the plugin.
 | Capability | Default | How it works |
 |---|---|---|
 | **Command rewriting** | on | Wraps `ToolDefinition.execute`; `git status` runs as `rtk git status`, and a result above 500 B starts with `[rtk] ran: rtk git status`. A rewrite rtk could not run is replayed as the original and labelled `[rtk] fell back:` |
+| **Semantic guard** | on | Checks that rtk's proposal still runs the original command; a proposal that drops arguments (`next build` → `rtk next` in rtk 1.1.0) is refused and the original command runs |
 | **Output compression** | on (≥ 2048 B) | `rtk hook claude` with a synthetic PostToolUse event in `tools/post-execute`; file/search results are skipped, small test/build output uses per-verb thresholds |
 | **Recovery** | on | rtk's `rtk recall <hash>` hint stays; when the sandbox cannot reach rtk's store, the original is spilled to session-private storage and named in the result |
 | **Session visibility** | on | `/rtk status` appends this session's savings and skip reasons; `/rtk stats [--json]` is the full report |
@@ -126,6 +127,8 @@ thresholds this table justifies.
 ## Documentation
 
 - [Reference manual](./docs/reference.md) — commands, configuration, recovery, compatibility matrix, troubleshooting, design notes.
+- [Compatibility ledger](./docs/compatibility.md) — verified hosts, declared ranges, and the `verify-host` script.
+- [Changelog](./CHANGELOG.md) — what changed in each release.
 - [中文手册](./docs/reference.zh.md) — the same manual in Chinese.
 
 ## Development
