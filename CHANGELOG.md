@@ -2,6 +2,28 @@
 
 All notable changes to `dsh-rtk-workbench`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.0] — 2026-11-05
+
+The savings become visible: one token estimate everywhere, a cross-restart ledger, and a web pill that shows what this session saved without running a command. 1.0.0 freezes the configuration keys and the command surface.
+
+### Added
+
+- **Web pill and overlay.** A composer-dock pill reads `saved 12.4k token · −81%`, turns warning-coloured when rtk is unusable or the injected pipeline fell back, and opens a details overlay (health, this session, lifetime, by tool, skip reasons, recent events, self-check, copy diagnostics). Read-only: nothing writes configuration. `uiPill: true` by default; `/rtk off ui` hides it.
+- **Read-only status route.** The host half serves `GET /api/rtk-workbench/status` and `POST /api/rtk-workbench/doctor` from the profile's webserver. The payload carries counts and enums only — no command text, no output, no paths.
+- **Token estimate.** Savings are priced from both texts at compression time (ASCII-dense text ÷ 4, CJK characters × 0.6) instead of the byte delta, because mixed Chinese and English output has no single bytes-per-token ratio. `/rtk stats`, `--json`, the pill, the overlay and every published number share one function.
+- **Cross-restart ledger.** Counts (never text) are persisted to `<DSH_HOME>/rtk-workbench/stats.json` with atomic, debounced writes; `statsPersist: 'aggregate' | 'off'`. `/rtk status` and `/rtk stats` gained `lifetime` lines.
+- **PTC accounting.** `run_code` sub-calls are counted under the `ptc` skip reason instead of disappearing, so uncovered bytes are visible.
+- **Platform guidance.** `/rtk doctor` names the platform package it expects, or says rtk publishes no build for this platform and offers `rtkPath`/PATH as the way out.
+- **Output-side guardrail.** The awareness section now states that condensation applies to tool output only: reports keep their numbers, caveats and warnings.
+- **Benchmark and packaging smoke.** `docs/benchmark.{md,zh.md}` from a deterministic fixture, `scripts/smoke-pack.mjs`, and a CI job that packs the artifact and checks the file list, both halves and the bundled binary.
+
+### Changed
+
+- The semantic guard accepts `next build [args]` → `rtk next [args]`: rtk's `next` command always injects the `build` subcommand, so the dropped word is not a dropped argument. Proposals that do drop one are still refused, and `/rtk explain` names the mapping that proved equivalence.
+- README defaults to Chinese (`README.en.md` keeps English) and was trimmed from 149 to 108 lines; the earlier per-case table moved into the benchmark document.
+- `dshTarget` is `0.2.2-rc.1`. The verified-host row was added to `docs/compatibility.md`.
+- Configuration keys and the `/rtk` command surface are frozen from this release: further keys are additive only.
+
 ## [0.2.0] — 2026-11-03
 
 The production-time compression loop: rewrite what rtk can rewrite, compress the rest through a plugin-owned rtk pipeline, make the original recoverable, and tell the model what happened.

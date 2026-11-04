@@ -6,6 +6,24 @@ import { fileURLToPath } from 'node:url'
 /** Platforms we publish a bundled binary for. */
 const SUPPORTED = new Set(['win32-x64', 'darwin-x64', 'darwin-arm64', 'linux-x64', 'linux-arm64'])
 
+/**
+ * Whether this build carries a binary for a platform, and the package id it
+ * would come from.
+ *
+ * `/rtk doctor` reports this so "installed but rtk unusable" has one obvious
+ * cause: a platform rtk itself does not publish a build for.
+ *
+ * @param platform - defaults to the running platform.
+ * @param arch - defaults to the running architecture.
+ */
+export function platformSupport(
+  platform: string = process.platform,
+  arch: string = process.arch,
+): { readonly id: string; readonly supported: boolean } {
+  const id = `${platform}-${arch}`
+  return { id, supported: SUPPORTED.has(id) }
+}
+
 /** Executable name inside a bundled payload. */
 function binaryName(platform: string): string {
   return platform === 'win32' ? 'rtk.exe' : 'rtk'

@@ -1,12 +1,13 @@
 {
   "name": "dsh-rtk-workbench",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "description": "Cuts tool-output tokens in DeepSeek Harness: command rewriting, rtk-powered output compression and a prompt section, with rtk bundled.",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "exports": {
     ".": "./lib/index.js",
+    "./client": "./lib/client.js",
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg"
   },
@@ -17,14 +18,16 @@
     "docs/reference.zh.md",
     "docs/compatibility.md",
     "docs/compatibility.zh.md",
+    "docs/benchmark.md",
+    "docs/benchmark.zh.md",
     "CHANGELOG.md",
     "locale/*.json",
     "icon.svg",
-    "README-zh.md"
+    "README.en.md"
   ],
   "scripts": {
     "build": "tsdown",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.client.json",
     "test": "vitest run",
     "prepare": "tsdown",
     "verify:host": "node scripts/verify-host.mjs",
@@ -51,6 +54,10 @@
     "manifestVersion": 1,
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": ["@deepseek-ai/dsh-client-ui-chat"]
     }
   },
   "engines": {
@@ -67,7 +74,7 @@
     "token",
     "compression"
   ],
-  "dshTarget": "0.2.1-rc.5",
+  "dshTarget": "0.2.2-rc.1",
   "dshRtkVersion": "1.1.0",
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis": {

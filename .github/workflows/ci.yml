@@ -40,6 +40,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: node node_modules/typescript/bin/tsc --noEmit
+      - run: node node_modules/typescript/bin/tsc -p tsconfig.client.json --noEmit
       - run: node node_modules/vitest/vitest.mjs run
       - run: node node_modules/tsdown/dist/run.mjs
       - name: repository checks
@@ -112,3 +113,29 @@ jobs:
           chmod +x "${{ matrix.out }}"
       - name: smoke the binary and the hook contract
         run: node scripts/smoke-rtk.mjs ./${{ matrix.out }}
+
+  pack:
+    # Installs nothing into a harness profile: this job proves the published
+    # artifact is complete (files list, host half under plain Node, browser half
+    # registration, bundled binary). The deeper `dsh plugin add` smoke is a
+    # release-time step in work/dsh-rtk-workbench/runbooks/release-workflow.md.
+    name: packaged artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node node_modules/tsdown/dist/run.mjs
+      - name: vendor the rtk binary for this platform
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/rtk-workbench
+          key: rtk-vendor-${{ runner.os }}-${{ hashFiles('package.json') }}
+      - run: node scripts/build-vendor.mjs
+      - run: pnpm pack
+      - run: node scripts/smoke-pack.mjs dsh-rtk-workbench-*.tgz

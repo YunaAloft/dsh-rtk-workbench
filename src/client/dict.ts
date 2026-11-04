@@ -1,0 +1,116 @@
+/**
+ * Client copy for the pill and its overlay.
+ *
+ * The host requires every client plugin to own its strings in a locale
+ * dictionary (`zh` and `en` are mandatory); hardcoded copy is rejected by the
+ * repository's i18n checks and would not follow the user's language switch.
+ *
+ * @module dsh-rtk-workbench/client/dict
+ */
+
+/** Namespace the strings are registered under. */
+export const NS = 'rtk-workbench'
+
+const zh = {
+  'pill.loading': 'rtk 读取中',
+  'pill.offline': 'rtk 不可用',
+  'pill.unavailable': 'rtk 不可用',
+  'pill.compressOff': 'rtk 压缩已关',
+  'pill.degraded': 'rtk 降级',
+  'pill.ready': 'rtk 待命',
+  'pill.readyDetail': '还没有可压缩的输出',
+  'pill.saved': '省 {tokens} token',
+  'pill.detail': '{calls} 次压缩 · {rewrites} 次改写',
+  'panel.health': '健康',
+  'panel.title': 'rtk 工作台',
+  'panel.loading': '正在读取状态…',
+  'panel.close': '关闭',
+  'panel.binary': '二进制',
+  'panel.probe': '探测',
+  'panel.pipeline': 'pipeline',
+  'panel.pipelineProblems': '注入未生效',
+  'panel.ok': '正常',
+  'panel.failed': '失败',
+  'panel.unknown': '未知',
+  'panel.switches': '开关',
+  'panel.rewrite': '改写',
+  'panel.compress': '压缩',
+  'panel.on': '开',
+  'panel.off': '关',
+  'panel.error': '错误',
+  'panel.session': '本会话',
+  'panel.none': '暂无数据',
+  'panel.savedTokens': '省下',
+  'panel.savedBytes': '体积',
+  'panel.calls': '次数',
+  'panel.callsValue': '{compressions} 次压缩 · {rewrites} 次改写 · {seconds} 秒',
+  'panel.lifetimeValue': '{compressions} 次压缩 · {rewrites} 次改写',
+  'panel.guard': '语义守卫拒绝',
+  'panel.skipped': '跳过原因',
+  'panel.skippedReason': '跳过（{reason}）',
+  'panel.lifetime': '累计（跨重启）',
+  'panel.nothingYet': '还没有记录',
+  'panel.persistenceOff': '持久统计已关闭（statsPersist: off）',
+  'panel.byTool': '按工具',
+  'panel.recent': '最近事件',
+  'panel.doctor': '运行自检',
+  'panel.copy': '复制诊断 JSON',
+  'panel.copied': '已复制',
+  'panel.doctorFailed': '自检失败',
+  'panel.footnote': 'token 为估算（ASCII ÷4，汉字 ×0.6）；百分比按字节计算',
+}
+
+const en: Record<keyof typeof zh, string> = {
+  'pill.loading': 'rtk loading',
+  'pill.offline': 'rtk unreachable',
+  'pill.unavailable': 'rtk unusable',
+  'pill.compressOff': 'rtk compression off',
+  'pill.degraded': 'rtk degraded',
+  'pill.ready': 'rtk ready',
+  'pill.readyDetail': 'nothing compressible yet',
+  'pill.saved': 'saved {tokens} token',
+  'pill.detail': '{calls} compressions · {rewrites} rewrites',
+  'panel.health': 'health',
+  'panel.title': 'rtk workbench',
+  'panel.loading': 'reading status…',
+  'panel.close': 'Close',
+  'panel.binary': 'binary',
+  'panel.probe': 'probe',
+  'panel.pipeline': 'pipeline',
+  'panel.pipelineProblems': 'injection inactive',
+  'panel.ok': 'ok',
+  'panel.failed': 'failed',
+  'panel.unknown': 'unknown',
+  'panel.switches': 'switches',
+  'panel.rewrite': 'rewrite',
+  'panel.compress': 'compress',
+  'panel.on': 'on',
+  'panel.off': 'off',
+  'panel.error': 'error',
+  'panel.session': 'this session',
+  'panel.none': 'nothing yet',
+  'panel.savedTokens': 'saved',
+  'panel.savedBytes': 'volume',
+  'panel.calls': 'calls',
+  'panel.callsValue': '{compressions} compressions · {rewrites} rewrites · {seconds} s',
+  'panel.lifetimeValue': '{compressions} compressions · {rewrites} rewrites',
+  'panel.guard': 'guard rejections',
+  'panel.skipped': 'skip reasons',
+  'panel.skippedReason': 'skipped ({reason})',
+  'panel.lifetime': 'lifetime (across restarts)',
+  'panel.nothingYet': 'nothing recorded yet',
+  'panel.persistenceOff': 'persistence is off (statsPersist: off)',
+  'panel.byTool': 'by tool',
+  'panel.recent': 'recent events',
+  'panel.doctor': 'Run self-check',
+  'panel.copy': 'Copy diagnostics JSON',
+  'panel.copied': 'Copied',
+  'panel.doctorFailed': 'self-check failed',
+  'panel.footnote': 'tokens are estimated (ASCII / 4, CJK x 0.6); percentages use bytes',
+}
+
+/** Dictionaries handed to `ctx.locale.register`. */
+export const dictionaries = { zh, en }
+
+/** Key type shared by both dictionaries. */
+export type MessageKey = keyof typeof zh

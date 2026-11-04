@@ -1,6 +1,6 @@
-# dsh-rtk-workbench reference (0.2.0)
+# dsh-rtk-workbench reference (1.0.0)
 
-Applies to DSH `0.2.1-rc.5`, rtk `1.1.0`, Node `^22.19.0 || >=24`. Restart `dsh web` after installing — a bundle change is not a page refresh.
+Applies to DSH `0.2.2-rc.1`, rtk `1.1.0`, Node `^22.19.0 || >=24`. Restart `dsh web` after installing — a bundle change is not a page refresh.
 
 ## 1. Install and verify
 
@@ -29,15 +29,20 @@ The `binary` line names the source: `bundled` (shipped with the package), `path`
 | `/rtk doctor` | Item-by-item self-check: binary, `pipeline show/validate/status`, `methods`, `trust`, a `hook claude` round trip, recall |
 | `/rtk gain` | Forwards to `rtk gain` — rtk-wide totals, not this session |
 | `/rtk recall <hash>` | Restores elided text in the host process; use it when the model shell is sandboxed away from rtk's store |
-| `/rtk on\|off <rewrite\|compress>` | Session toggle; `/rtk off compress` isolates a competing result transformer |
+| `/rtk on\|off <rewrite\|compress\|ui>` | Session toggle; `/rtk off compress` isolates a competing result transformer, `/rtk off ui` hides the web pill |
 | `/rtk help [topic]` | Command list; `topic` is `pipeline`, `sandbox`, `recovery` or `config` |
+
+**Web pill and overlay.** In the web GUI the plugin renders one pill in the composer dock — `saved 12.4k token · −81%` — with the compression and rewrite counts beside it and the guard count only after a rejection. Three colours: normal, warning (rtk unusable, or the injected pipeline fell back), grey (compression switched off). Clicking it opens an overlay with health, this session, lifetime, by-tool rows, skip reasons, the last three events, a self-check button and a diagnostics copy action. The pill is hidden until the first status document arrives and can be turned off with `uiPill: false` or `/rtk off ui`.
+
+The browser half reads one read-only route the host half mounts on the profile's webserver: `GET /api/rtk-workbench/status` (counts and enums only — no command text, output or paths) and `POST /api/rtk-workbench/doctor` (runs the same diagnostics as `/rtk doctor`). A headless profile has no webserver, so the route is simply absent there.
 
 Example `/rtk status` summary:
 
 ```
-session    : 12 compressions 48.2 KB → 9.1 KB (-81%, ~9.8k tok), 1.4 s, 3 rewrites
-skipped    : size 9, scope 4
+session    : 12 compressions 48.2 KB → 9.1 KB (-81%, ~9.8k tok saved), 1.4 s, 3 rewrites
+skipped    : size 9, scope 4, ptc 3
 learned    : rewrite suppressed for ls
+lifetime   : 2 831 compressions, ~1.2M tok saved since 2026-11-05
 ```
 
 ## 3. Configuration
@@ -53,7 +58,7 @@ Every key can be overridden from `cordis.patch.yml`; values are validated at loa
 | `rewriteEnabled` | `true` | Master switch for rewriting |
 | `rewriteFallback` | `retry` | Replay the original command when rtk itself failed (rtk failure signatures only) |
 | `rewriteSandboxGuard` | `auto` | Windows + confined sandbox skips rewrites (see `help sandbox`); `off` forces them |
-| `rewriteSemanticGuard` | `enforce` | Verify the proposal still runs the original command; `off` trusts rtk's stdout (rtk 1.1.0 maps `next build` to `rtk next`) |
+| `rewriteSemanticGuard` | `enforce` | Verify the proposal still runs the original command; `off` trusts rtk's stdout. `next build` → `rtk next` is accepted (rtk injects `build`); `python -m pytest` → `rtk pytest` is refused |
 | `shellTools` | `['bash','pwsh']` | Names treated as shells for detection |
 | `rewriteTools` | `['bash','ops_bash','pwsh']` | Tools eligible for rewriting; `discoverShellTools` also accepts shell-like names |
 | `rewriteExcludeCommands` | `['cat','type','bat','less','more','head','tail']` | Command words never rewritten |
@@ -66,6 +71,8 @@ Every key can be overridden from `cordis.patch.yml`; values are validated at loa
 | `compressThresholdByFamily` | see below | Per-verb threshold overrides, e.g. `pytest: 512` |
 | `spillOriginal` | `auto` | Spill the pre-compression text to session-private storage: `auto` (when rtk recall is unreachable) / `always` / `off` |
 | `maxSpillBytes` | `1048576` | Do not spill above this size |
+| `statsPersist` | `aggregate` | Persist counts (never text) to `<DSH_HOME>/rtk-workbench/stats.json` so totals survive a restart; `off` keeps them in memory |
+| `uiPill` | `true` | Show the savings pill and its overlay in the web GUI; `/rtk off ui` hides it for the session |
 | `awarenessEnabled` | `true` | Inject the prompt section (only after the probe proves rtk works) |
 | `denyEnabled` | `false` | Honour rtk's deny verdict; DSH has no host permission rules, so this stays off |
 | `pipelineMode` | `auto` | `auto` respects an existing user pipeline; `plugin-owned` always injects; `user` never injects |
@@ -98,10 +105,10 @@ Every key can be overridden from `cordis.patch.yml`; values are validated at loa
 
 | Component | Version |
 |---|---|
-| DeepSeek Harness | `0.2.1-rc.5` (target; `dshTarget` in `package.json`) |
+| DeepSeek Harness | `0.2.2-rc.1` (target; `dshTarget` in `package.json`) |
 | rtk | `1.1.0` (bundled; `dshRtkVersion`) |
 | Node | `^22.19.0 || >=24` |
-| Plugin | `0.2.0` |
+| Plugin | `1.0.0` |
 
 The matrix describes the plugin's *observable* behaviour. "skipped" always means
 "refused before spawning", never "tried and failed silently".
@@ -130,7 +137,9 @@ The matrix describes the plugin's *observable* behaviour. "skipped" always means
 | `dsh-token-saver` (trims in `tools/post-execute`) | Safe: its trimming markers are recognised and this layer leaves the text alone | No double trimming |
 | `billion-context` (folds old dialogue, ACP markers) | Safe: ACP-marked content is skipped | None |
 
-**Semantic guard.** Before executing a proposal, the plugin checks that every rewritten segment still carries the original command: a plain prefix (`git status` → `rtk git status`), a `gradle` → `gradlew` mapping, or a `read` mapping whose path and line window survive. A proposal that dropped a token — rtk 1.1.0 turns `next build` into `rtk next` and `python -m pytest` into `rtk pytest` — is refused, the original command runs, and the call is counted under `guard` in `/rtk stats`. `/rtk explain <command>` shows the verdict for one command. Rejected rewrites still get post-execute compression on their output.
+**Semantic guard.** Before executing a proposal, the plugin checks that every rewritten segment still carries the original command: a plain prefix (`git status` → `rtk git status`), a `gradle` → `gradlew` mapping, a `next build [args]` → `rtk next [args]` mapping (rtk's `next` always injects the `build` subcommand, so no argument is lost), or a `read` mapping whose path and line window survive. A proposal that dropped a token — rtk 1.1.0 turns `python -m pytest` into `rtk pytest` — is refused, the original command runs, and the call is counted under `guard` in `/rtk stats`. `/rtk explain <command>` shows the verdict and names the mapping that proved equivalence. Rejected rewrites still get post-execute compression on their output.
+
+**Token figures.** Savings are estimated from both texts at compression time: ASCII-dense characters price at 0.25 tokens each, CJK characters and full-width forms at 0.6. The byte delta is never used as a proxy, because mixed Chinese and English output has no single bytes-per-token ratio. Every surface — `/rtk stats`, `--json`, the pill, the overlay, the benchmark and the README — reads the same function; `tests/tokens.test.ts` pins it and `tests/benchmark-tokens.test.ts` keeps the benchmark script's copy in sync. It is an estimate, not provider billing.
 
 **Version policy.** Platform subpackages share the main package's version and record the bundled rtk version; a DSH upgrade re-runs the compatibility check against the new tag before release. The reference rtk source is the release tag matching the bundled binary (`release-v1.1.0`), never `develop`.
 
@@ -144,8 +153,10 @@ The matrix describes the plugin's *observable* behaviour. "skipped" always means
 | A command fails unexpectedly | rtk could not spawn the real command | The sandbox guard already skips these; turn `rewriteSandboxGuard` back on |
 | `rtk recall` reports a store error | Sandboxed shell | Ask the user for `/rtk recall`, or read the spill path |
 | One verb keeps failing | The environment cannot run it | It is tripped; see the `learned` line |
-| A rewritten command looks like a different command | rtk's proposal dropped an argument (`next build` → `rtk next`) | The semantic guard runs the original; see `guard` in `/rtk stats` and `/rtk explain <cmd>` |
+| A rewritten command looks like a different command | rtk's proposal dropped an argument (`python -m pytest` → `rtk pytest`) | The semantic guard runs the original; see `guard` in `/rtk stats` and `/rtk explain <cmd>` |
 | Results look changed by someone else | Another result transformer | The `observed` line; compare with `/rtk off compress` |
+| The pill never appears | Headless profile (no webserver), the route failed to mount, or the UI switch is off | `/rtk status` still works; check `uiPill` and `/rtk on ui` |
+| `platform pkg: none for …` in `/rtk doctor` | rtk publishes no build for this platform (e.g. Windows arm64) | Point `rtkPath` at an rtk on PATH or inside WSL, or use a different plugin |
 
 ## 8. Known limitations (host differences, not missing work)
 
@@ -155,6 +166,8 @@ The matrix describes the plugin's *observable* behaviour. "skipped" always means
 - rtk's deny rules read `~/.claude` permissions; DSH has no such rules, so deny stays off.
 - A Windows confined sandbox cannot let rtk spawn the real command, so rewriting is unavailable there (compression still works).
 - `fish` wrapping, `rtk init` claiming DSH, and the Windows-with-WSL backend are unsupported.
+- The pill and overlay exist only in the web GUI; headless and CLI surfaces use `/rtk status`.
+- Token figures are an estimate with a fixed heuristic; no provider tokenizer is available offline.
 
 ## 9. Design notes
 
@@ -163,5 +176,7 @@ The matrix describes the plugin's *observable* behaviour. "skipped" always means
 - The pipeline is plugin-owned via `RTK_CONFIG_DIR`, and `auto` removes that override when the user's pipeline already compresses.
 - A failed rewrite is replayed as the original command and that verb is suppressed, so a broken environment degrades to a normal command.
 - Compression scope follows the call shape (file/search results stay untouched) and the original is spilled when rtk recall is unreachable.
-- Session counters live in memory: they answer "what did this plugin do in this session", not what rtk's global database says.
+- Session counters live in memory: they answer "what did this plugin do in this session", not what rtk's global database says. Aggregates (counts only) are also appended to `<DSH_HOME>/rtk-workbench/stats.json` so the totals survive a restart.
+- Savings are priced from the before/after texts at compression time and accumulated in tokens; the ledger stores counts, never command text or output.
+- The browser half writes nothing: it reads one read-only route, renders, and disposes its poll and styles with the plugin lifecycle.
 - A Windows confined sandbox skips rewrites up front because rtk cannot spawn the wrapped command there; compression is unaffected.

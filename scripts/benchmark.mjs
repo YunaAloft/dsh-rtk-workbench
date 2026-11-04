@@ -19,6 +19,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { estimateTokens } from './tokens.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const argv = process.argv.slice(2)
@@ -144,21 +145,37 @@ const rows = []
 
 /** Record one case: same command, raw vs rtk-rewritten. */
 function rewriteCase(label, command, args) {
-  const raw = run(fixture, command, args)
-  const rewritten = run(fixture, RTK, [command, ...args])
-  rows.push({
-    label,
-    path: 'rewrite',
-    before: bytes(raw),
-    after: bytes(rewritten),
-    same: normalize(raw).includes(normalize(rewritten).slice(0, 40)),
-  })
+  try {
+    const raw = run(fixture, command, args)
+    const rewritten = run(fixture, RTK, [command, ...args])
+    rows.push({
+      label,
+      path: 'rewrite',
+      before: bytes(raw),
+      after: bytes(rewritten),
+      beforeTokens: estimateTokens(raw),
+      afterTokens: estimateTokens(rewritten),
+      same: normalize(raw).includes(normalize(rewritten).slice(0, 40)),
+    })
+  } catch (error) {
+    // A command the platform does not ship (for example `ls`/`grep` on Windows)
+    // is reported as skipped instead of failing the whole benchmark.
+    rows.push({ label, path: 'rewrite', skipped: error instanceof Error ? error.message.split('\n')[0] : String(error) })
+  }
 }
 
 /** Record one case: same output, raw vs PostToolUse compression. */
 function compressCase(label, text, options) {
   const out = compress(text, options)
-  rows.push({ label, path: 'compress', before: bytes(text), after: bytes(out), same: normalize(text) === normalize(out) })
+  rows.push({
+    label,
+    path: 'compress',
+    before: bytes(text),
+    after: bytes(out),
+    beforeTokens: estimateTokens(text),
+    afterTokens: estimateTokens(out),
+    same: normalize(text) === normalize(out),
+  })
 }
 
 rewriteCase('git status', 'git', ['status'])
@@ -178,27 +195,34 @@ const table = [
   '| Case | Path | Before | After | Saved | Est. tokens before → after |',
   '|---|---|---:|---:|---:|---:|',
   ...rows.map((row) => {
+    if (row.skipped !== undefined) {
+      return `| ${row.label} | ${row.path} | — | — | skipped | — |`
+    }
     const delta = row.before === 0 ? 0 : (1 - row.after / row.before) * 100
-    const tokensBefore = Math.ceil(row.before / 4)
-    const tokensAfter = Math.ceil(row.after / 4)
     const sign = delta >= 0 ? '−' : '+'
     const amount = Math.abs(delta).toFixed(1)
-    return `| ${row.label} | ${row.path} | ${row.before.toLocaleString('en-US')} B | ${row.after.toLocaleString('en-US')} B | ${sign}${amount} % | ${tokensBefore.toLocaleString('en-US')} → ${tokensAfter.toLocaleString('en-US')} |`
+    return `| ${row.label} | ${row.path} | ${row.before.toLocaleString('en-US')} B | ${row.after.toLocaleString('en-US')} B | ${sign}${amount} % | ${row.beforeTokens.toLocaleString('en-US')} → ${row.afterTokens.toLocaleString('en-US')} |`
   }),
 ].join('\n')
+
+const measured = rows.filter((row) => row.skipped === undefined)
 
 if (asJson) {
   console.log(JSON.stringify({ platform: process.platform, rtk: RTK, rows }, null, 2))
 } else {
-  const totalBefore = rows.reduce((sum, row) => sum + row.before, 0)
-  const totalAfter = rows.reduce((sum, row) => sum + row.after, 0)
+  const totalBefore = measured.reduce((sum, row) => sum + row.before, 0)
+  const totalAfter = measured.reduce((sum, row) => sum + row.after, 0)
+  const tokensBefore = measured.reduce((sum, row) => sum + row.beforeTokens, 0)
+  const tokensAfter = measured.reduce((sum, row) => sum + row.afterTokens, 0)
   console.log(table)
   console.log('')
   console.log(
-    `Total: ${totalBefore.toLocaleString('en-US')} B → ${totalAfter.toLocaleString('en-US')} B (−${((1 - totalAfter / totalBefore) * 100).toFixed(1)} %), est. tokens ${Math.ceil(totalBefore / 4).toLocaleString('en-US')} → ${Math.ceil(totalAfter / 4).toLocaleString('en-US')}`,
+    `Total: ${totalBefore.toLocaleString('en-US')} B → ${totalAfter.toLocaleString('en-US')} B (−${((1 - totalAfter / totalBefore) * 100).toFixed(1)} %), est. tokens ${tokensBefore.toLocaleString('en-US')} → ${tokensAfter.toLocaleString('en-US')}`,
   )
   console.log('')
-  console.log('Token figures are bytes/4 estimates; fixtures are ASCII-heavy. Re-run with `--json` for raw numbers.')
+  console.log(
+    `Token figures use the plugin's own estimate (ASCII / 4, CJK x 0.6), not a provider tokenizer; skipped rows name a command this platform does not ship. Re-run with \`--json\` for raw numbers.`,
+  )
 }
 
 rmSync(fixture, { recursive: true, force: true })

@@ -88,6 +88,12 @@ export interface Config {
   statsPersist: 'aggregate' | 'off'
   /** Inject the rtk awareness section into the system prompt. */
   awarenessEnabled: boolean
+  /**
+   * Show the composer-dock pill (and its overlay) in the web GUI. On by default:
+   * the point of the pill is to be seen without a command. `/rtk off ui` hides
+   * it for this session.
+   */
+  uiPill: boolean
   /** Honour rtk's `deny` verdict from the PreToolUse bridge. Default off. */
   denyEnabled: boolean
   /**
@@ -203,6 +209,9 @@ export const Config: Schema<Config> = Schema.object({
       'Persist aggregate counters across restarts (counts only, never command text or tool output). `off` keeps them in memory.',
     ),
   awarenessEnabled: Schema.boolean().default(true).description('Inject the rtk awareness section into the system prompt.'),
+  uiPill: Schema.boolean()
+    .default(true)
+    .description('Show the rtk savings pill and its overlay in the web GUI; `/rtk off ui` hides it for this session.'),
   denyEnabled: Schema.boolean().default(false).description("Honour rtk's deny verdict. Off by default: cc-safety-net already covers command blocking."),
   pipelineMode: Schema.union(['auto', 'plugin-owned', 'user'])
     .default('auto')

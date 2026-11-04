@@ -1,6 +1,6 @@
-# dsh-rtk-workbench 参考手册（0.2.0）
+# dsh-rtk-workbench 参考手册（1.0.0）
 
-适用：DSH `0.2.1-rc.5`、rtk `1.1.0`、Node `^22.19.0 || >=24`。安装后需要重启 `dsh web`（bundle 变更不是刷新页面）。
+适用：DSH `0.2.2-rc.1`、rtk `1.1.0`、Node `^22.19.0 || >=24`。安装后需要重启 `dsh web`（bundle 变更不是刷新页面）。
 
 ## 1. 安装与验证
 
@@ -29,15 +29,20 @@ dsh plugin --profile <profile> add dsh-rtk-workbench
 | `/rtk doctor` | 逐项自检：二进制、`pipeline show/validate/status`、`methods`、`trust`、`hook claude` 往返、recall |
 | `/rtk gain` | 转发 `rtk gain`：rtk 全库统计（不是本会话）；本会话请看 `status` 的 `session` 行 |
 | `/rtk recall <hash>` | 在宿主进程里恢复 rtk 省略的原文；模型 shell 被沙箱隔离时用它 |
-| `/rtk on\|off <rewrite\|compress>` | 本会话内临时开关；`/rtk off compress` 可用来排查另一个结果变换器 |
+| `/rtk on\|off <rewrite\|compress\|ui>` | 本会话内临时开关；`/rtk off compress` 可用来排查另一个结果变换器，`/rtk off ui` 隐藏界面药丸 |
 | `/rtk help [topic]` | 命令列表；`topic` 可取 `pipeline`、`sandbox`、`recovery`、`config` |
+
+**界面药丸与浮层。** Web GUI 里插件在输入框上方渲染一个药丸——`省 12.4k token · −81%`——旁边是压缩与改写次数，守卫计数只在拒绝过之后出现。三种颜色：正常、警示（rtk 不可用或注入的 pipeline 回退）、灰色（压缩已关）。点开是浮层：健康、本会话、累计、按工具、跳过原因、最近三条事件、运行自检与复制诊断。药丸在拿到第一份状态之前不显示，可用 `uiPill: false` 或 `/rtk off ui` 关掉。
+
+浏览器半只读一条宿主半挂在该 profile webserver 上的路由：`GET /api/rtk-workbench/status`（只有计数与枚举，没有命令原文、输出或路径）与 `POST /api/rtk-workbench/doctor`（跑与 `/rtk doctor` 相同的自检）。headless profile 没有 webserver，这条路由自然不存在。
 
 `/rtk status` 的 `session` 行示例：
 
 ```
-session    : 12 compressions 48.2 KB → 9.1 KB (-81%, ~9.8k tok), 1.4 s, 3 rewrites
-skipped    : size 9, scope 4
+session    : 12 compressions 48.2 KB → 9.1 KB (-81%, ~9.8k tok saved), 1.4 s, 3 rewrites
+skipped    : size 9, scope 4, ptc 3
 learned    : rewrite suppressed for ls
+lifetime   : 2 831 compressions, ~1.2M tok saved since 2026-11-05
 ```
 
 ## 3. 配置
@@ -53,7 +58,7 @@ learned    : rewrite suppressed for ls
 | `rewriteEnabled` | `true` | 改写总开关 |
 | `rewriteFallback` | `retry` | rtk 自身失败时是否重放原命令（只认 rtk 的失败签名） |
 | `rewriteSandboxGuard` | `auto` | Windows 受限沙箱下跳过改写（见 `help sandbox`）；`off` 强制 |
-| `rewriteSemanticGuard` | `enforce` | 校验改写结果仍在执行原命令；`off` 直接信任 rtk 的输出（rtk 1.1.0 会把 `next build` 改成 `rtk next`） |
+| `rewriteSemanticGuard` | `enforce` | 校验改写结果仍在执行原命令；`off` 直接信任 rtk 的输出。`next build` → `rtk next` 被接受（rtk 会注入 `build`），`python -m pytest` → `rtk pytest` 被拒绝 |
 | `shellTools` | `['bash','pwsh']` | 用于识别的 shell 名 |
 | `rewriteTools` | `['bash','ops_bash','pwsh']` | 允许改写的工具名；`discoverShellTools` 打开时额外识别 shell 风格名字 |
 | `rewriteExcludeCommands` | `['cat','type','bat','less','more','head','tail']` | 永远不改写的命令词 |
@@ -66,6 +71,8 @@ learned    : rewrite suppressed for ls
 | `compressThresholdByFamily` | 见下 | 按命令首词的阈值覆盖，如 `pytest: 512` |
 | `spillOriginal` | `auto` | 把压缩前原文写到会话私有 spill 存储：`auto`（rtk 恢复不可用时）/`always`/`off` |
 | `maxSpillBytes` | `1048576` | 超过此大小不落盘 |
+| `statsPersist` | `aggregate` | 把计数（不含任何文本）持久化到 `<DSH_HOME>/rtk-workbench/stats.json`，重启后累计仍在；`off` 只留在内存 |
+| `uiPill` | `true` | 在 Web GUI 显示省量药丸与浮层；`/rtk off ui` 本会话隐藏 |
 | `awarenessEnabled` | `true` | 注入提示段（只在探测确认 rtk 可用后注入） |
 | `denyEnabled` | `false` | 遵守 rtk 的 deny 判定；DSH 无宿主权限规则，默认关 |
 | `pipelineMode` | `auto` | `auto` 尊重已有用户 pipeline；`plugin-owned` 总是注入；`user` 不注入 |
@@ -98,10 +105,10 @@ learned    : rewrite suppressed for ls
 
 | 组件 | 版本 |
 |---|---|
-| DeepSeek Harness | `0.2.1-rc.5`（目标；`package.json` 的 `dshTarget`） |
+| DeepSeek Harness | `0.2.2-rc.1`（目标；`package.json` 的 `dshTarget`） |
 | rtk | `1.1.0`（内置；`dshRtkVersion`） |
 | Node | `^22.19.0 || >=24` |
-| 插件 | `0.2.0` |
+| 插件 | `1.0.0` |
 
 下表描述插件的**可观察行为**；`skipped` 一律指"在 spawn 之前就拒绝"，不是"试了但静默失败"。
 
@@ -129,7 +136,9 @@ learned    : rewrite suppressed for ls
 | `dsh-token-saver`（在 `tools/post-execute` 裁剪） | 安全：它的裁剪标记会被识别，本层不再动那段文本 | 不会二次裁剪 |
 | `billion-context`（折叠旧对话、ACP 标记） | 安全：带 ACP 标记的内容直接跳过 | 无需处理 |
 
-**语义守卫。** 执行改写结果前，插件逐段确认它仍在执行原命令：普通前缀（`git status` → `rtk git status`）、`gradle` → `gradlew` 映射、或路径与行数都保留的 `read` 映射。任何丢了参数的提案——rtk 1.1.0 会把 `next build` 变成 `rtk next`、把 `python -m pytest` 变成 `rtk pytest`——会被拒绝，原命令照跑，并在 `/rtk stats` 的 `guard` 计数里体现。`/rtk explain <命令>` 会给出单条命令的判定。被拒的改写仍会照常走 post-execute 压缩。
+**语义守卫。** 执行改写结果前，插件逐段确认它仍在执行原命令：普通前缀（`git status` → `rtk git status`）、`gradle` → `gradlew` 映射、`next build [args]` → `rtk next [args]` 映射（rtk 的 `next` 固定注入 `build` 子命令，所以没有丢参数），或路径与行数都保留的 `read` 映射。任何丢了参数的提案——rtk 1.1.0 会把 `python -m pytest` 变成 `rtk pytest`——会被拒绝，原命令照跑，并在 `/rtk stats` 的 `guard` 计数里体现。`/rtk explain <命令>` 给出判定并说明是哪种映射证明的等价。被拒的改写仍会照常走 post-execute 压缩。
+
+**token 口径。** 节省量由压缩发生时的前后文本各自估算：ASCII 稠密字符按每字符 0.25 token，汉字与全角形式按每字符 0.6 token。绝不用字节差反推，因为中英混排没有统一的字节/token 比。所有界面——`/rtk stats`、`--json`、药丸、浮层、基准与 README——读同一个函数；`tests/tokens.test.ts` 钉住公式，`tests/benchmark-tokens.test.ts` 保证基准脚本里的副本同步。它是估算，不是服务商计费口径。
 
 **版本策略。** 平台子包与主包同版本并记录内置 rtk 版本；DSH 升级后按新 tag 重跑兼容检查再发版。rtk 的参考源码用与内置二进制一致的发布 tag（`release-v1.1.0`），不用 `develop`。
 
@@ -143,8 +152,10 @@ learned    : rewrite suppressed for ls
 | 命令莫名失败 | rtk 派生子进程被拒（沙箱） | `rewriteSandboxGuard` 默认已抑制；若强制打开则关掉 |
 | `rtk recall` 报 store 错误 | shell 被沙箱隔离 | 让用户 `/rtk recall`，或读 spill 路径 |
 | 一个动词反复失败 | 运行环境跑不了该动词 | 已被熔断；`status` 的 `learned` 行确认 |
-| 改写后像是另一条命令 | rtk 的提案丢了参数（`next build` → `rtk next`） | 语义守卫会跑原命令；看 `/rtk stats` 的 `guard` 与 `/rtk explain <命令>` |
+| 改写后像是另一条命令 | rtk 的提案丢了参数（`python -m pytest` → `rtk pytest`） | 语义守卫会跑原命令；看 `/rtk stats` 的 `guard` 与 `/rtk explain <命令>` |
 | 结果被别的插件改过 | 另一个结果变换器在跑 | `status` 的 `observed` 行；`/rtk off compress` 对比 |
+| 界面药丸不出现 | headless profile（没有 webserver）、路由挂载失败，或 UI 开关被关 | `/rtk status` 仍可用；检查 `uiPill` 与 `/rtk on ui` |
+| `/rtk doctor` 显示 `platform pkg: none for …` | rtk 没有为该平台发布构建（如 Windows arm64） | 用 `rtkPath` 指向 PATH 或 WSL 里的 rtk，或换用别的插件 |
 
 ## 8. 已知限制（宿主差异，不是实现缺陷）
 
@@ -154,6 +165,8 @@ learned    : rewrite suppressed for ls
 - rtk 的 deny 规则读 `~/.claude` 权限配置，DSH 没有这套语义，因此默认关闭。
 - Windows 受限沙箱下 rtk 无法派生真实命令，改写物理不可用（压缩不受影响）。
 - `fish` 脚本包装、`rtk init` 认领 DSH、Windows 上的 WSL 后端均无对应支持。
+- 药丸与浮层只存在于 Web GUI；headless 与纯 CLI 场景用 `/rtk status`。
+- token 数字是固定启发式的估算；离线拿不到服务商分词器。
 
 ## 9. 设计说明
 
@@ -162,6 +175,8 @@ learned    : rewrite suppressed for ls
 - pipeline 通过 `RTK_CONFIG_DIR` 自管；`auto` 在用户 pipeline 已能压缩时撤掉覆盖。
 - 改写失败重放原命令并拉黑该动词，坏环境退化成"普通命令"而不是"坏命令"。
 - 压缩范围按调用形状决定（文件/搜索不动）；rtk recall 不可达时把原文落盘。
-- 会话计数只在内存：回答"本插件本会话做了什么"，不替代 rtk 的全局库。
+- 会话计数只在内存：回答"本插件本会话做了什么"，不替代 rtk 的全局库；只存计数的累计也会追加写入 `<DSH_HOME>/rtk-workbench/stats.json`，重启后仍在。
+- 节省量在压缩发生时按前后文本估算并以 token 累计；账本只存计数，不存命令与输出。
+- 浏览器半不写任何东西：只读一条路由、只渲染，随插件生命周期释放轮询与样式。
 - Windows 受限沙箱直接跳过改写（rtk 无法派生子进程），压缩不受影响。
-- 改写结果先过语义守卫：只接受前缀、`gradle→gradlew` 与参数保留的 `read` 映射，其余退回原命令。
+- 改写结果先过语义守卫：只接受前缀、`gradle→gradlew`、参数保留的 `next build→rtk next` 与 `read` 映射，其余退回原命令。

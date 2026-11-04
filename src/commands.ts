@@ -1,6 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Config } from './config'
 import { describeRun, runRtk } from './rtk/exec'
+import { platformSupport } from './rtk/bundled'
 import { isWorthRewriting, verbOf } from './rtk/rewrite'
 import { verifyRewrite } from './rtk/verify'
 import { AWARENESS_SECTION_NAME } from './awareness'
@@ -70,7 +71,7 @@ export const HELP = [
   '  doctor         deep self-check: binary, pipeline, round trip, recall, trust',
   '  gain           forward to `rtk gain` (rtk-wide totals, not this session)',
   '  recall <hash>  restore output rtk elided',
-  '  on|off <rewrite|compress>   toggle a switch for this session',
+  '  on|off <rewrite|compress|ui>   toggle a switch for this session',
   '  help [topic]   this list, or one topic: pipeline, sandbox, recovery, config',
 ].join('\n')
 
@@ -109,7 +110,7 @@ export const HELP_TOPICS: Readonly<Record<string, string>> = {
     "  Every key is in cordis.patch.yml; defaults are in the plugin's Schema.",
     '  Most useful: rewriteEnabled, compressEnabled, pipelineMode, rewriteSandboxGuard,',
     '  rewriteSemanticGuard, compressThresholdBytes / compressThresholdByFamily, spillOriginal,',
-    '  annotateStyle.',
+    '  annotateStyle, statsPersist (cross-restart counters), uiPill (the web GUI pill).',
     '  The full table is in docs/reference.md.',
   ].join('\n'),
 }
@@ -247,7 +248,13 @@ export function createCommandHandler(context: CommandContext) {
 
   /** Deep self-check: everything a user needs to paste into a bug report. */
   async function doctor(): Promise<CommandOutcome> {
+    const platform = platformSupport()
     const lines = ['rtk-workbench doctor', `platform   : ${process.platform} ${process.arch}`, `binary     : ${binary}  (${context.binarySource})`]
+    lines.push(
+      platform.supported
+        ? `platform pkg: dsh-rtk-workbench-${platform.id}  (bundled binary expected)`
+        : `platform pkg: none for ${platform.id} — rtk 1.1.0 publishes no build for it; set rtkPath to an rtk on PATH (or inside WSL) or use a different plugin`,
+    )
     const versionRun = await run(binary, ['--version'], { timeoutMs: budget, env: context.env, maxBytes: 4096 })
     lines.push(`rtk        : ${(versionRun.stdout || versionRun.stderr).trim() || describeRun(versionRun)}`)
 
@@ -424,11 +431,12 @@ export function createCommandHandler(context: CommandContext) {
       case 'off': {
         const target = rest[0]
         const enabled = sub === 'on'
-        if (target !== 'rewrite' && target !== 'compress') {
-          return { kind: 'error', text: 'usage: /rtk on|off rewrite|compress' }
+        if (target !== 'rewrite' && target !== 'compress' && target !== 'ui') {
+          return { kind: 'error', text: 'usage: /rtk on|off rewrite|compress|ui' }
         }
         if (target === 'rewrite') config.rewriteEnabled = enabled
-        else config.compressEnabled = enabled
+        else if (target === 'compress') config.compressEnabled = enabled
+        else config.uiPill = enabled
         return { kind: 'success', text: `${target} ${flag(enabled)}` }
       }
       default:

@@ -27,6 +27,7 @@ function baseConfig(): Config {
     maxSpillBytes: 1024 * 1024,
     statsPersist: 'off',
     awarenessEnabled: true,
+    uiPill: true,
     denyEnabled: false,
     pipelineMode: 'plugin-owned',
     annotateRewrites: true,

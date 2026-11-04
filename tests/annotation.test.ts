@@ -26,6 +26,7 @@ function baseConfig(overrides: Partial<Config> = {}): Config {
     maxSpillBytes: 1024 * 1024,
     statsPersist: 'off',
     awarenessEnabled: true,
+    uiPill: true,
     denyEnabled: false,
     pipelineMode: 'auto',
     annotateRewrites: true,

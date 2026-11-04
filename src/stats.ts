@@ -1,6 +1,10 @@
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
+import { formatBytes } from './format'
 import type { LifetimeTotals } from './stats-file'
 import { formatTokens } from './tokens'
+
+/** Re-exported so callers keep one import site for the session report. */
+export { formatBytes }
 
 /** Why one result was not compressed (for the status summary). */
 export type SkipReason = 'size' | 'scope' | 'marked' | 'payload' | 'ptc'
@@ -13,6 +17,17 @@ export interface ToolSaving {
   savedTokens: number
 }
 
+/** One observed result, for the "what just happened" list. */
+export interface RecentEvent {
+  readonly at: number
+  readonly tool: string
+  readonly kind: 'compress' | 'skip'
+  readonly reason?: SkipReason
+  readonly savedTokens?: number
+  /** Fraction of the original bytes that did not reach the model, 0–1. */
+  readonly ratio?: number
+}
+
 /** One session's observed work, independent of rtk's own database. */
 export interface SessionStats {
   compressions: number
@@ -23,6 +38,33 @@ export interface SessionStats {
   byTool: Map<string, ToolSaving>
   skipped: Record<SkipReason, number>
   errors: { rtk: number; timeout: number }
+  lastAt: number
+  recent: RecentEvent[]
+}
+
+/** Tool row of the JSON status payload. */
+export interface ToolSnapshot {
+  readonly name: string
+  readonly calls: number
+  readonly inBytes: number
+  readonly outBytes: number
+  readonly savedTokens: number
+}
+
+/** JSON-safe view of one session, served to the web UI. */
+export interface SessionSnapshot {
+  readonly key: string
+  readonly compressions: number
+  readonly inBytes: number
+  readonly outBytes: number
+  readonly savedTokens: number
+  readonly ms: number
+  readonly ratio: number
+  readonly skipped: Record<SkipReason, number>
+  readonly errors: { rtk: number; timeout: number }
+  readonly byTool: readonly ToolSnapshot[]
+  readonly recent: readonly RecentEvent[]
+  readonly updatedAt: number
 }
 
 /** Counters that live outside the compression layer. */
@@ -44,15 +86,15 @@ function emptyStats(): SessionStats {
     byTool: new Map(),
     skipped: { size: 0, scope: 0, marked: 0, payload: 0, ptc: 0 },
     errors: { rtk: 0, timeout: 0 },
+    lastAt: 0,
+    recent: [],
   }
 }
 
+/** Keep this many recent events per session. */
+const RECENT_LIMIT = 20
+
 /** Human byte size, one decimal for KB and above. */
-export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${String(bytes)} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
 
 /**
  * Session-scoped counters for what the plugin itself observed.
@@ -64,6 +106,8 @@ export function formatBytes(bytes: number): string {
  */
 export function createStats() {
   const sessions = new Map<string, SessionStats>()
+  /** Most recently recorded session; the web UI shows this one as "this session". */
+  let active: string | undefined
 
   /** Session key for one call; calls without an agent share one bucket. */
   function keyOf(exec: Pick<ToolExecution, 'agent'>): string {
@@ -115,11 +159,26 @@ export function createStats() {
     stats.outBytes += outBytes
     stats.savedTokens += savedTokens
     stats.compressMs += ms
+    stats.lastAt = Date.now()
+    stats.recent.push({
+      at: stats.lastAt,
+      tool: exec.name,
+      kind: 'compress',
+      savedTokens,
+      ratio: inBytes === 0 ? 0 : Math.max(0, Math.min(1, 1 - outBytes / inBytes)),
+    })
+    if (stats.recent.length > RECENT_LIMIT) stats.recent.splice(0, stats.recent.length - RECENT_LIMIT)
+    active = keyOf(exec)
   }
 
   /** Record one result that was deliberately not compressed. */
-  function recordSkipped(exec: Pick<ToolExecution, 'agent'>, reason: SkipReason): void {
-    bucket(keyOf(exec)).skipped[reason] += 1
+  function recordSkipped(exec: Pick<ToolExecution, 'agent' | 'name'>, reason: SkipReason): void {
+    const stats = bucket(keyOf(exec))
+    stats.skipped[reason] += 1
+    stats.lastAt = Date.now()
+    stats.recent.push({ at: stats.lastAt, tool: exec.name, kind: 'skip', reason })
+    if (stats.recent.length > RECENT_LIMIT) stats.recent.splice(0, stats.recent.length - RECENT_LIMIT)
+    active = keyOf(exec)
   }
 
   /** Record an rtk-side failure (never a normal command failure). */
@@ -252,6 +311,38 @@ export function createStats() {
     return { calls: stats.compressions, savedBytes: stats.inBytes - stats.outBytes }
   }
 
+  /** The session that recorded something most recently (for the web UI). */
+  function activeKey(): string | undefined {
+    return active
+  }
+
+  /**
+   * JSON-safe view of one session, or `undefined` when it recorded nothing.
+   *
+   * @param key - session key (`stats.keyOfAgent(agent)`).
+   */
+  function snapshot(key: string | undefined): SessionSnapshot | undefined {
+    if (key === undefined) return undefined
+    const stats = sessions.get(key)
+    if (stats === undefined) return undefined
+    return {
+      key,
+      compressions: stats.compressions,
+      inBytes: stats.inBytes,
+      outBytes: stats.outBytes,
+      savedTokens: stats.savedTokens,
+      ms: Math.round(stats.compressMs),
+      ratio: stats.inBytes === 0 ? 0 : Math.max(0, Math.min(1, 1 - stats.outBytes / stats.inBytes)),
+      skipped: { ...stats.skipped },
+      errors: { ...stats.errors },
+      byTool: [...stats.byTool.entries()]
+        .map(([name, tool]) => ({ name, ...tool }))
+        .sort((left, right) => right.inBytes - left.inBytes),
+      recent: stats.recent.slice(-3),
+      updatedAt: stats.lastAt,
+    }
+  }
+
   return {
     keyOf,
     keyOfAgent,
@@ -262,5 +353,7 @@ export function createStats() {
     formatReport,
     toJson,
     summary,
+    activeKey,
+    snapshot,
   }
 }

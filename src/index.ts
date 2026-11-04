@@ -13,6 +13,7 @@ import { spillOriginal } from './rtk/spill'
 import { createStats } from './stats'
 import { createLifetimeStore, defaultStatsFile } from './stats-file'
 import { commandOf, decideTool, isShellLike } from './toolmap'
+import { mountStatusRoute, type InjectingContext } from './web/status-route'
 
 export const name = 'dsh-rtk-workbench'
 
@@ -36,6 +37,8 @@ interface LoggerLike {
 interface Capability {
   state: 'unknown' | 'ok' | 'fail'
   detail: string
+  /** `rtk --version` output once the probe succeeded. */
+  version: string
   probedAt: number
   probing: boolean
   /** Whether rtk's recall store is usable from this host (drives spill decisions). */
@@ -164,6 +167,7 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
   const capability: Capability = {
     state: 'unknown',
     detail: 'not probed yet',
+    version: '',
     probedAt: 0,
     probing: false,
     recall: 'unknown',
@@ -246,7 +250,8 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
           return
         }
         capability.state = 'ok'
-        capability.detail = `${(run.stdout || run.stderr).trim()} (probe ${String(Date.now() - started)} ms)`
+        capability.version = (run.stdout || run.stderr).trim()
+        capability.detail = `${capability.version} (probe ${String(Date.now() - started)} ms)`
         logger.info?.(
           `[rtk-workbench] ${capability.detail} via ${resolution.source} — rewrite ${String(config.rewriteEnabled)}, compress ${String(config.compressEnabled)}`,
         )
@@ -404,8 +409,10 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
     })
   }
 
-  whenService<CommandsLike>(ctx, 'commands', (commands) => {
-    const handler = createCommandHandler({
+  // The command handler is built before the web route because `/doctor` on that
+  // route reuses the same diagnostics; registering the command itself still
+  // waits for the service.
+  const commandHandler = createCommandHandler({
       ctx,
       config,
       binary,
@@ -447,13 +454,52 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
       foreignTransforms: () => foreignTransforms,
       capability: () => ({ state: capability.state, detail: capability.detail }),
     })
+
+  // The web UI reads this route; a headless profile has no webserver, so the
+  // service simply never appears there.
+  mountStatusRoute(ctx as Context & InjectingContext, {
+    sources: {
+      binary: () => ({ source: resolution.source, version: capability.version }),
+      probe: () => ({ state: capability.state, detail: capability.detail }),
+      pipeline: () => ({
+        mode: pipeline.mode,
+        health: pipeline.health,
+        ...(pipeline.detail === undefined ? {} : { detail: pipeline.detail }),
+      }),
+      switches: () => ({
+        rewrite: config.rewriteEnabled,
+        compress: config.compressEnabled,
+        awareness: config.awarenessEnabled,
+        guard: config.rewriteSemanticGuard,
+        deny: config.denyEnabled,
+        ui: config.uiPill,
+      }),
+      rewrites: () => ({
+        calls: rewrites.rewriteCount(),
+        fallbacks: rewrites.fallbackCount(),
+        guards: rewrites.guardCount(),
+        learned: rewrites.learnedList(),
+      }),
+      session: () => stats.snapshot(stats.activeKey()),
+      lifetime: () => lifetime.snapshot(),
+      patched: () => rewrites.patchedList(),
+      persist: () => ({ enabled: config.statsPersist === 'aggregate' }),
+    },
+    doctor: async () => {
+      const outcome = await commandHandler.handle({ rawInput: 'doctor', agent: undefined })
+      return outcome.text ?? ''
+    },
+    log: (message: string) => logger.info?.(`[rtk-workbench] ${message}`),
+  })
+
+  whenService<CommandsLike>(ctx, 'commands', (commands) => {
     ctx.effect(() =>
       commands.register({
         definitionId: 'dsh-rtk-workbench',
         name: 'rtk',
         description: 'Inspect rtk, its switches and restore elided output.',
         input: { hint: 'status | tools | gain | recall <hash> | on|off rewrite|compress' },
-        handler: (invocation) => handler.handle(invocation),
+        handler: (invocation) => commandHandler.handle(invocation),
       }),
     )
   })

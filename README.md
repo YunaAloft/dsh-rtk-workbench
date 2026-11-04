@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>English</strong> · <a href="./README-zh.md">中文</a>
+  <a href="./README.en.md">English</a> · <strong>中文</strong>
 </p>
 
 <p align="center">
@@ -13,148 +13,95 @@
 </p>
 
 <p align="center">
-  <em>Bring <a href="https://github.com/rtk-ai/rtk">rtk (Rust Token Killer)</a> to DeepSeek Harness — and ship the binary with it.</em><br>
-  <sub>rewrite what you can · compress what is left · tell the model what happened</sub>
+  <em>把 <a href="https://github.com/rtk-ai/rtk">rtk（Rust Token Killer）</a> 接进 DeepSeek Harness，二进制一起带上。</em><br>
+  <sub>能改写的改写 · 改不动的压缩 · 省了多少看得见</sub>
 </p>
 
 ## Why this exists
 
-rtk sits between the agent and its tools: it rewrites commands into filtered
-equivalents and condenses tool output before the model reads it. It ships an
-adapter for each of 20 agents — for Claude Code that is a `PreToolUse` hook.
-DeepSeek Harness had no such adapter, and existing DSH plugins only implemented
-the rewrite half.
+rtk 站在 agent 和工具之间：把命令改写成过滤版，并在模型读到工具输出之前先压一遍。官方为 20 个 agent 写了适配层，DSH 不在其中；社区已有的 DSH 插件也只补了「改写」或「裁剪」的一半。
 
-- No output compression: commands rtk cannot rewrite still put their full output into context.
-- No context note: the model sees `[... elided ...]`, assumes the result is incomplete, and re-runs the command.
-- No bundled binary: a plugin that only works once you install rtk somewhere else silently does nothing.
-
-This plugin closes all three and keeps every failure path open: if rtk is
-missing, slow, or answers something unexpected, the tool call behaves exactly as
-it would without the plugin.
+这个插件把三件事一次补齐：**改写**（委托 rtk 的规则）、**压缩**（真 rtk 方法链，不重造引擎）、**可见**（省下的 token 记在统计里，也在界面上一眼看到）。所有失败路径保持开放：rtk 缺失、超时或返回意料之外的东西时，工具调用和没装这个插件时完全一样。
 
 ## What you get
 
-| Capability | Default | How it works |
+| 能力 | 默认 | 说明 |
 |---|---|---|
-| **Command rewriting** | on | Wraps `ToolDefinition.execute`; `git status` runs as `rtk git status`, and a result above 500 B starts with `[rtk] ran: rtk git status`. A rewrite rtk could not run is replayed as the original and labelled `[rtk] fell back:` |
-| **Semantic guard** | on | Checks that rtk's proposal still runs the original command; a proposal that drops arguments (`next build` → `rtk next` in rtk 1.1.0) is refused and the original command runs |
-| **Output compression** | on (≥ 2048 B) | `rtk hook claude` with a synthetic PostToolUse event in `tools/post-execute`; file/search results are skipped, small test/build output uses per-verb thresholds |
-| **Recovery** | on | rtk's `rtk recall <hash>` hint stays; when the sandbox cannot reach rtk's store, the original is spilled to session-private storage and named in the result |
-| **Session visibility** | on | `/rtk status` appends this session's savings and skip reasons; `/rtk stats [--json]` is the full report |
-| **Awareness section** | on | One static prompt section explaining `[rtk] ran:`, `[rtk] fell back:`, elisions, `rtk recall` and the saved-path form; registered only after rtk is proven usable |
-| **Bundled rtk** | on | The binary ships as a per-platform optional package; nothing to install, `rtkSource: 'path'` opts out |
-| **rtk `deny` rules** | off | Feeds `rtk hook claude` a PreToolUse event and honours `permissionDecision: deny`; DSH has no host permission rules, so this stays off |
-| **`/rtk` commands** | always | `status`, `stats`, `tools`, `explain`, `doctor`, `gain`, `recall <hash>`, `help [topic]`, `on`/`off` per switch |
+| **命令改写** | 开 | `git status` 以 `rtk git status` 执行；结果首行标 `[rtk] ran:`，rtk 跑不起来时重放原命令并标 `[rtk] fell back:` |
+| **语义守卫** | 开 | 校验改写仍在执行原命令；`next build` 走 `rtk next`（rtk 会注入 `build`），丢参数的提案被拒、原命令照跑 |
+| **输出压缩** | 开（≥ 2 KB） | `rtk hook claude` 压缩大输出；文件/搜索结果默认跳过 |
+| **恢复** | 开 | 保留 `rtk recall <hash>`；沙箱够不到 rtk 库时原文落盘并给出路径 |
+| **节省可见** | 开 | token 估算（ASCII ÷4、汉字 ×0.6）+ 跨重启累计；`/rtk stats` 查明细，界面上的药丸随时可瞥 |
+| **/rtk 命令组** | 常驻 | `status`、`stats`、`tools`、`explain`、`doctor`、`gain`、`recall`、`on/off` |
 
-Nothing here registers a new tool, replaces a shell executor, or touches the model API.
+不注册新工具、不替换 shell 执行器、不碰模型 API。
 
 ## Install
 
-**From the plugin panel** — search `dsh-rtk-workbench` in *Add plugin* and install, or:
+在**插件面板**里搜 `dsh-rtk-workbench` 点安装，或者：
 
 ```sh
 dsh plugin --profile web add dsh-rtk-workbench
 ```
 
-**Or straight from a GitHub Release** — pick the asset for your platform:
-
-| Platform | Asset |
-|---|---|
-| Windows x64 | `dsh-rtk-workbench-win32-x64.tgz` |
-| macOS Intel | `dsh-rtk-workbench-darwin-x64.tgz` |
-| macOS Apple silicon | `dsh-rtk-workbench-darwin-arm64.tgz` |
-| Linux x64 | `dsh-rtk-workbench-linux-x64.tgz` |
-| Linux arm64 | `dsh-rtk-workbench-linux-arm64.tgz` |
-
-**Restart the host after installing** (a bundle change is not a page refresh).
-You do not need to install rtk separately: the platform binary is an optional
-dependency of this package.
+装完**重启宿主**（bundle 变更不是刷新页面）。**不需要单独安装 rtk**——平台二进制随包分发，覆盖 Windows x64、macOS x64/arm64、Linux x64/arm64；其它平台见 [参考手册](./docs/reference.zh.md)。
 
 ## Quick start
 
 ```
-/rtk status     # binary, provenance, pipeline health, switches, this session's savings
-/rtk stats      # full session report (--json for machines)
-/rtk doctor     # deep self-check: version, pipeline, a real round trip, recall, trust
-/rtk tools      # how each visible tool resolved (canonical / alias / explicit)
-/rtk explain "git status"   # why a command would (not) be rewritten
+/rtk status            # 二进制、pipeline、开关、本会话省量
+/rtk explain "next build"   # 这条命令为什么会被（不会被）改写
+/rtk off ui            # 隐藏输入框上方的省量药丸
+/rtk stats             # 完整报告；--json 给机器读
 ```
 
-Then work normally: a big `git status` comes back as a compact one-line-per-file
-result prefixed with `[rtk] ran: rtk git status`; a `cat` of a 100 KB log is
-condensed and points at `rtk recall <hash>` — or, in a sandboxed session, at an
-`[rtk] original saved: <path>` file you can read.
+之后正常干活：大仓库里的 `git status` 变成紧凑结果；`cat` 一个 100 KB 日志会被压缩并指向 `rtk recall <hash>`，沙箱里则给出可直接读的落盘路径。
 
 ## How it works
 
+改写靠包装 `ToolDefinition.execute`（不是重派发），保留注册表的信号融合与记账；压缩在 `tools/post-execute` 里先 `await next()` 再做内容替换，因此安全插件与 spill 策略照常生效。
+
 ```mermaid
 flowchart LR
-  M[model calls a tool] --> P[tools/pre-execute]
-  P -->|patch| X[ToolDefinition.execute]
-  X -->|rtk rewrite| R{"rewritable?"}
-  R -->|yes| E1["run rtk &lt;cmd&gt;"]
-  R -->|no| E2["run the original"]
-  E1 --> C[tools/post-execute]
+  M["模型调用工具"] --> X[包装后的 execute]
+  X -->|rtk rewrite| R{"能改写？"}
+  R -->|是| E1["执行 rtk &lt;cmd&gt;"]
+  R -->|否| E2["执行原命令"]
+  E1 --> C["tools/post-execute"]
   E2 --> C
-  C -->|await next| D[downstream listeners]
-  D --> G{"≥ threshold, in scope?"}
-  G -->|yes| H["rtk hook claude → updatedToolOutput"]
-  G -->|no| I[return unchanged]
-  H --> J["replace content, keep value"]
+  C -->|≥ 阈值| H["rtk hook claude → 替换 content"]
+  C -->|否则| I[原样返回]
 ```
 
-Rewriting patches `execute` instead of re-dispatching, so the registry's signal
-fusion and accounting stay intact; compression always awaits `next()` first, so
-security and spill listeners still run. The detailed rules are in the reference
-manual.
+界面侧：宿主半提供一条只读 `GET /api/rtk-workbench/status`，浏览器半在输入框上方显示「省 X token · −N%」，点开是明细浮层。
 
 ## Measured effect
 
-| Case | Path | Before | After | Drop |
-|---|---|---:|---:|---:|
-| `git status` | rewrite | 377 B | 47 B | −87.5 % |
-| `grep -rn TODO src`, 300 hits | rewrite | 20 364 B | 2 190 B | −89.2 % |
-| pytest output, 2 001 lines | compress | 89 505 B | 11 287 B | −87.4 % |
-| `package-lock.json`, read shape | compress | 76 896 B | 4 654 B | −93.9 % |
+确定性基准的合计：**463 507 B → 38 265 B（−91.7 %）**，约 115.9k → 9.6k 估算 token；单项从 `git status` 的 −87.5 % 到 5 000 行日志的 −95.0 %。
 
-`node scripts/benchmark.mjs` reproduces this on a deterministic fixture; the
-fixture is deliberately repetitive, so re-run it on your own workload before
-quoting numbers. This is bytes, not tokens: the reference manual explains the
-thresholds this table justifies.
-
+完整表格、复现方法与「这些数字不能证明什么」见 [基准测试](./docs/benchmark.zh.md)。token 为估算值，不是服务商计费口径。
 
 ## Documentation
 
-- [Reference manual](./docs/reference.md) — commands, configuration, recovery, compatibility matrix, troubleshooting, design notes.
-- [Compatibility ledger](./docs/compatibility.md) — verified hosts, declared ranges, and the `verify-host` script.
-- [Changelog](./CHANGELOG.md) — what changed in each release.
-- [中文手册](./docs/reference.zh.md) — the same manual in Chinese.
+- [参考手册](./docs/reference.zh.md) —— 命令、配置、恢复、兼容矩阵、排障、设计说明
+- [基准测试](./docs/benchmark.zh.md) —— 固定 fixture 的可复现数字与边界
+- [兼容性台账](./docs/compatibility.zh.md) —— 已验证宿主、声明范围、`verify-host`
+- [变更记录](./CHANGELOG.md) —— 每个版本改了什么
 
 ## Development
 
 ```sh
 pnpm install
-node node_modules/typescript/bin/tsc --noEmit
-node node_modules/vitest/vitest.mjs run
-node node_modules/tsdown/dist/run.mjs          # build lib/
-node scripts/build-vendor.mjs                  # package rtk (downloads ~31 MB, cached)
-node scripts/release.mjs --dry-run             # print the release plan
-node scripts/check-manifest.mjs                # package-level requirements (parsed YAML, peers, files, display meta)
-node scripts/check-docs.mjs                    # README pairing and relative-link integrity
+pnpm typecheck          # host + client 两个编译面
+pnpm test
+pnpm build              # lib/index.js（宿主）+ lib/client.js（浏览器）
 ```
 
-`scripts/smoke-rtk.mjs <binary>` verifies a bundled binary. CI runs the smoke on
-every shipped platform and the unit suite on Ubuntu, macOS arm64 and Windows.
+更多脚本（`benchmark`、`release`、`check-manifest`、`check-docs`）见参考手册。
 
 ## Credits
 
-Compression rules, filters and the `hook` protocol are [rtk](https://github.com/rtk-ai/rtk)'s
-work; this plugin is the DeepSeek Harness adapter and redistributes the rtk
-binary unchanged. That binary is Apache-2.0 and links `rtk-engine` under
-BUSL-1.1 (source-available; production use is free and the license converts to
-Apache-2.0 on 2030-09-09, but rtk may not be offered as a paid or hosted
-product). Both texts ship in [`licenses/`](./licenses).
+压缩规则、过滤器与 `hook` 协议都是 [rtk](https://github.com/rtk-ai/rtk) 的工作；本插件是 DeepSeek Harness 侧的适配层，原样分发 rtk 二进制（Apache-2.0，链接 BUSL-1.1 的 `rtk-engine`，两份许可随包分发，见 [`licenses/`](./licenses)）。
 
 ## License
 
