@@ -11,6 +11,7 @@ import { describeRun, resolveRtk, runRtk } from './rtk/exec'
 import { inspectPipeline, pipelineEnv, userPipelineCompresses } from './rtk/pipeline'
 import { spillOriginal } from './rtk/spill'
 import { createStats } from './stats'
+import { createLifetimeStore, defaultStatsFile } from './stats-file'
 import { commandOf, decideTool, isShellLike } from './toolmap'
 
 export const name = 'dsh-rtk-workbench'
@@ -122,6 +123,18 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
   // A mutable copy: `/rtk on|off` flips switches for this session without
   // rewriting the loader config (which is static after load).
   const config: ConfigShape = { ...rawConfig }
+  /**
+   * Cross-restart counters. Counts only (never command text or output), loaded
+   * synchronously so early calls are not lost, flushed in the background.
+   */
+  const lifetime = createLifetimeStore({
+    enabled: config.statsPersist === 'aggregate',
+    file: defaultStatsFile(),
+  })
+  lifetime.load()
+  ctx.effect(() => () => {
+    void lifetime.dispose()
+  })
   const { env, configDir } = pipelineEnv(config.pipelineMode)
   /**
    * Live pipeline state. `mode` starts as what the config asked for, then `auto`
@@ -277,8 +290,13 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
     retryOnRtkFailure: config.rewriteFallback === 'retry',
     cacheTtlMs: config.rewriteCacheTtlMs,
     semanticGuard: config.rewriteSemanticGuard === 'enforce',
-    onRtkFailure: (exec) => stats.recordError(exec, 'rtk'),
+    onRtkFailure: (exec) => {
+      stats.recordError(exec, 'rtk')
+      lifetime.record({ kind: 'fallback' })
+    },
     onTimeout: (exec) => stats.recordError(exec, 'timeout'),
+    onRewrite: () => lifetime.record({ kind: 'rewrite' }),
+    onGuardRejected: () => lifetime.record({ kind: 'guard' }),
   })
   ctx.effect(() => () => rewrites.dispose())
 
@@ -316,7 +334,10 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
     cwdOf: (exec) => callCwd(ctx, exec),
     timeoutOf: () => coldStartTimeout(config, capability.state),
     spillOf,
-    onCompressed: (exec, inBytes, outBytes, ms) => stats.recordCompress(exec, inBytes, outBytes, ms),
+    onCompressed: (exec, inBytes, outBytes, savedTokens, ms) => {
+      stats.recordCompress(exec, inBytes, outBytes, savedTokens, ms)
+      lifetime.record({ kind: 'compress', inBytes, outBytes, savedTokens })
+    },
     onSkipped: (exec, reason) => stats.recordSkipped(exec, reason),
     onForeignTransform: () => {
       foreignTransforms += 1
@@ -408,13 +429,15 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
           learned: rewrites.learnedList(),
           guards: rewrites.guardCount(),
         }
+        const totals = lifetime.snapshot()
         return {
-          lines: stats.formatLines(key, counters),
-          report: stats.formatReport(key, counters),
-          json: stats.toJson(key, counters),
+          lines: stats.formatLines(key, counters, totals),
+          report: stats.formatReport(key, counters, totals),
+          json: stats.toJson(key, counters, totals),
           summary: stats.summary(key),
         }
       },
+      lifetime: () => lifetime.snapshot(),
       rewrites: () => ({
         calls: rewrites.rewriteCount(),
         fallbacks: rewrites.fallbackCount(),

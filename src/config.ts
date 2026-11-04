@@ -80,6 +80,12 @@ export interface Config {
   spillOriginal: 'auto' | 'always' | 'off'
   /** Skip spilling texts above this many bytes. */
   maxSpillBytes: number
+  /**
+   * Persist aggregate counters across restarts. `aggregate` writes counts only —
+   * never command text, tool output or paths — to
+   * `<DSH_HOME>/rtk-workbench/stats.json`; `off` keeps everything in memory.
+   */
+  statsPersist: 'aggregate' | 'off'
   /** Inject the rtk awareness section into the system prompt. */
   awarenessEnabled: boolean
   /** Honour rtk's `deny` verdict from the PreToolUse bridge. Default off. */
@@ -191,6 +197,11 @@ export const Config: Schema<Config> = Schema.object({
   maxSpillBytes: Schema.number()
     .default(1024 * 1024)
     .description('Skip spilling texts larger than this many bytes.'),
+  statsPersist: Schema.union(['aggregate', 'off'])
+    .default('aggregate')
+    .description(
+      'Persist aggregate counters across restarts (counts only, never command text or tool output). `off` keeps them in memory.',
+    ),
   awarenessEnabled: Schema.boolean().default(true).description('Inject the rtk awareness section into the system prompt.'),
   denyEnabled: Schema.boolean().default(false).description("Honour rtk's deny verdict. Off by default: cc-safety-net already covers command blocking."),
   pipelineMode: Schema.union(['auto', 'plugin-owned', 'user'])

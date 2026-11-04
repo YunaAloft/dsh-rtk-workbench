@@ -56,10 +56,35 @@ describe('semantic guard: structure', () => {
 })
 
 describe('decideRewrite with the semantic guard', () => {
-  it('refuses a proposal that dropped an argument', () => {
+  it('accepts rtk next for next build: the rtk command always appends the build subcommand', () => {
     expect(decideRewrite('next build', { code: 3, stdout: 'rtk next\n' })).toEqual({
+      kind: 'rewrite',
+      command: 'rtk next',
+    })
+    expect(decideRewrite('next build --turbo', { code: 3, stdout: 'rtk next --turbo\n' })).toEqual({
+      kind: 'rewrite',
+      command: 'rtk next --turbo',
+    })
+  })
+
+  it('refuses a proposal that dropped an argument', () => {
+    expect(decideRewrite('next build --turbo', { code: 3, stdout: 'rtk next\n' })).toEqual({
       kind: 'none',
       reason: 'guard',
+    })
+    expect(decideRewrite('python -m pytest', { code: 3, stdout: 'rtk pytest\n' })).toEqual({
+      kind: 'none',
+      reason: 'guard',
+    })
+  })
+
+  it('names the mapping that proved equivalence, for /rtk explain', () => {
+    expect(verifyRewrite('next build', 'rtk next')).toEqual({ ok: true, via: 'next-build' })
+    expect(verifyRewrite('git status', 'rtk git status')).toEqual({ ok: true, via: 'prefix' })
+    expect(verifyRewrite('gradle build', 'rtk gradlew build')).toEqual({ ok: true, via: 'gradle' })
+    expect(verifyRewrite('head -20 f.txt', 'rtk read f.txt --head-lines 20')).toEqual({
+      ok: true,
+      via: 'read',
     })
   })
 

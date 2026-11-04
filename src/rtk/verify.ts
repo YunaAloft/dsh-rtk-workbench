@@ -12,9 +12,10 @@
  *
  * 1. a **prefix rewrite**: the segment is exactly `rtk <original segment>`;
  * 2. a **known mapping with preserved arguments**: `gradle …` →
- *    `rtk gradlew …`, and the `read` family (`cat`/`head`/`tail`/…) →
- *    `rtk read <path> [--head-lines N]`, where every non-flag token and every
- *    number from the original must survive.
+ *    `rtk gradlew …`, `next build …` → `rtk next …` (rtk's `next` command always
+ *    injects `build`, so dropping the word is not dropping an argument), and the
+ *    `read` family (`cat`/`head`/`tail`/…) → `rtk read <path> [--head-lines N]`,
+ *    where every non-flag token and every number from the original must survive.
  *
  * Everything else is rejected to the untouched original command. A rejected
  * rewrite costs the rtk inline compression for that call, but the post-execute
@@ -29,8 +30,11 @@ import { splitSegments } from './segments'
 /** Why a proposal was rejected. */
 export type GuardReason = 'segment-mismatch' | 'env-mismatch' | 'tokens-dropped' | 'unknown-transform'
 
+/** How a proposal was proven equivalent to the original command. */
+export type GuardVia = 'prefix' | 'gradle' | 'next-build' | 'read' | 'unchanged'
+
 /** Outcome of checking one proposal. */
-export type GuardVerdict = { readonly ok: true } | { readonly ok: false; readonly reason: GuardReason }
+export type GuardVerdict = { readonly ok: true; readonly via: GuardVia } | { readonly ok: false; readonly reason: GuardReason }
 
 /** One `NAME=value` word in front of a segment. */
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=\S+$/
@@ -78,6 +82,26 @@ function isGradleMapping(original: string, rewritten: string): boolean {
 }
 
 /**
+ * `next build [args]` → `rtk next [args]` (arguments preserved verbatim).
+ *
+ * `rtk next` is not a bare passthrough: its implementation always appends the
+ * `build` subcommand before the caller's arguments (falling back to
+ * `npx next build` when `next` is not on PATH), so the dropped word is not a
+ * dropped argument. rtk 1.1.0 rewrites `next build` and nothing else, which is
+ * why `next dev` never reaches this check.
+ *
+ * @param original - one normalized segment of the caller's command.
+ * @param rewritten - the matching segment of rtk's proposal.
+ */
+function isNextBuildMapping(original: string, rewritten: string): boolean {
+  const from = original.split(' ')
+  const to = rewritten.split(' ')
+  if (from[0] !== 'next' || from[1] !== 'build') return false
+  if (to[0] !== 'rtk' || to[1] !== 'next') return false
+  return from.slice(2).join(' ') === to.slice(2).join(' ')
+}
+
+/**
  * `head -20 f` → `rtk read f --head-lines 20` (path and numbers preserved).
  *
  * The family is excluded from rewriting by default; this entry only matters for
@@ -110,17 +134,31 @@ export function verifyRewrite(original: string, rewritten: string): GuardVerdict
     return { ok: false, reason: 'segment-mismatch' }
   }
 
+  let via: GuardVia = 'unchanged'
   for (let index = 0; index < fromSegments.length; index += 1) {
     const from = splitEnv(fromSegments[index] ?? '')
     const to = splitEnv(toSegments[index] ?? '')
     if (from.env.join(' ') !== to.env.join(' ')) return { ok: false, reason: 'env-mismatch' }
     if (to.rest === from.rest) continue
-    if (isPrefixRewrite(from.rest, to.rest)) continue
-    if (isGradleMapping(from.rest, to.rest)) continue
-    if (isReadMapping(from.rest, to.rest)) continue
+    if (isPrefixRewrite(from.rest, to.rest)) {
+      if (via === 'unchanged') via = 'prefix'
+      continue
+    }
+    if (isGradleMapping(from.rest, to.rest)) {
+      if (via === 'unchanged') via = 'gradle'
+      continue
+    }
+    if (isNextBuildMapping(from.rest, to.rest)) {
+      if (via === 'unchanged') via = 'next-build'
+      continue
+    }
+    if (isReadMapping(from.rest, to.rest)) {
+      if (via === 'unchanged') via = 'read'
+      continue
+    }
     const dropped = from.rest.split(' ').some((token) => !to.rest.includes(token))
     return { ok: false, reason: dropped ? 'tokens-dropped' : 'unknown-transform' }
   }
 
-  return { ok: true }
+  return { ok: true, via }
 }

@@ -3,6 +3,7 @@ import type { Config } from './config'
 import { compressWithRtk, pickShape, type HookOutput } from './rtk/compress'
 import { verbOf } from './rtk/rewrite'
 import type { SkipReason } from './stats'
+import { estimateSavedTokens } from './tokens'
 import { commandOf, decideTool, pathOf, patternOf } from './toolmap'
 
 type AcceptDecision = Extract<PostToolDecision, { kind: 'accept' }>
@@ -46,7 +47,13 @@ export interface CompressLayerOptions {
   /** Optional sink for timing diagnostics (`RTK_WORKBENCH_DEBUG=1`). */
   readonly log?: (message: string) => void
   /** Session counters: one call per compression pass. */
-  readonly onCompressed?: (exec: ToolExecution, inBytes: number, outBytes: number, ms: number) => void
+  readonly onCompressed?: (
+    exec: ToolExecution,
+    inBytes: number,
+    outBytes: number,
+    savedTokens: number,
+    ms: number,
+  ) => void
   /** Session counters: one call per deliberately skipped result. */
   readonly onSkipped?: (exec: ToolExecution, reason: SkipReason) => void
   /**
@@ -107,8 +114,12 @@ export function createCompressLayer(options: CompressLayerOptions) {
       | undefined,
   ): Promise<Blocks | undefined> {
     // A PTC sub-call result reaches the program, not the model, unless the outer
-    // run_code prints it; touching it would only cost a spawn.
-    if (exec.parent !== undefined) return undefined
+    // run_code prints it; touching it would only cost a spawn. Counted as `ptc`
+    // so the unstamped bytes are visible instead of silently missing.
+    if (exec.parent !== undefined) {
+      options.onSkipped?.(exec, 'ptc')
+      return undefined
+    }
 
     const decision = decideTool(exec.name, config)
     const wantsAnnotation = rewrite !== undefined && config.annotateRewrites
@@ -157,7 +168,10 @@ export function createCompressLayer(options: CompressLayerOptions) {
           ...(cwd === undefined ? {} : { cwd }),
         })
         const elapsed = Date.now() - started
-        options.onCompressed?.(exec, text.length, compressed?.text.length ?? text.length, elapsed)
+        // Price both texts instead of the byte delta: a compression that drops
+        // ASCII while keeping CJK saves fewer tokens than its byte count suggests.
+        const savedTokens = estimateSavedTokens(text, compressed?.text ?? text)
+        options.onCompressed?.(exec, text.length, compressed?.text.length ?? text.length, savedTokens, elapsed)
         options.log?.(
           `compress ${exec.name}: ${String(text.length)} -> ${String(compressed?.text.length ?? 0)} B in ${String(elapsed)} ms`,
         )

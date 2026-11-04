@@ -24,6 +24,7 @@ function baseConfig(overrides: Partial<Config> = {}): Config {
     compressThresholdByFamily: {},
     spillOriginal: 'auto',
     maxSpillBytes: 1024 * 1024,
+    statsPersist: 'off',
     awarenessEnabled: true,
     denyEnabled: false,
     pipelineMode: 'auto',

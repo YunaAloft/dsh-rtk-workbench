@@ -26,6 +26,7 @@ function baseConfig(overrides: Partial<Config> = {}): Config {
     compressThresholdByFamily: { pytest: 512, cargo: 512, git: 512 },
     spillOriginal: 'auto',
     maxSpillBytes: 1024 * 1024,
+    statsPersist: 'off',
     awarenessEnabled: true,
     denyEnabled: false,
     pipelineMode: 'plugin-owned',
@@ -189,5 +190,38 @@ describe('compression notes and spill', () => {
       expect(compress, marker).not.toHaveBeenCalled()
       expect(skipped, marker).toHaveBeenCalledWith(expect.anything(), 'marked')
     }
+  })
+
+  it('counts a PTC sub-call as skipped instead of silently dropping it', async () => {
+    const skipped = vi.fn()
+    const compress = fakeRoundTrip('should not run')
+    const layer = makeLayer(baseConfig(), { compress, onSkipped: skipped })
+    await runOnce(
+      layer,
+      { name: 'bash', arguments: { command: 'cargo test' }, parent: Symbol('ptc') },
+      'x'.repeat(4096),
+    )
+    expect(compress).not.toHaveBeenCalled()
+    expect(skipped).toHaveBeenCalledWith(expect.anything(), 'ptc')
+  })
+
+  it('reports bytes and estimated tokens for one compression', async () => {
+    const compressed = vi.fn()
+    const layer = makeLayer(baseConfig({ compressTools: ['*'] }), {
+      compress: fakeRoundTrip('short'),
+      onCompressed: compressed,
+    })
+    await runOnce(layer, { name: 'bash', arguments: { command: 'cargo test' } }, 'a'.repeat(4000))
+    const [, inBytes, outBytes, savedTokens] = compressed.mock.calls[0] as [
+      unknown,
+      number,
+      number,
+      number,
+      number,
+    ]
+    expect(inBytes).toBe(4000)
+    expect(outBytes).toBe(5)
+    // 4000 ASCII characters price at 1000 tokens; `short` prices at 2.
+    expect(savedTokens).toBe(998)
   })
 })

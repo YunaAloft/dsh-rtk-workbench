@@ -28,6 +28,7 @@ function baseConfig(overrides: Partial<Config> = {}): Config {
     compressThresholdByFamily: { pytest: 512 },
     spillOriginal: 'auto',
     maxSpillBytes: 1024 * 1024,
+    statsPersist: 'off',
     awarenessEnabled: true,
     denyEnabled: false,
     pipelineMode: 'plugin-owned',

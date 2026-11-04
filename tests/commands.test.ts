@@ -25,6 +25,7 @@ function baseConfig(): Config {
     compressThresholdByFamily: { pytest: 512 },
     spillOriginal: 'auto',
     maxSpillBytes: 1024 * 1024,
+    statsPersist: 'off',
     awarenessEnabled: true,
     denyEnabled: false,
     pipelineMode: 'plugin-owned',
@@ -141,15 +142,29 @@ describe('/rtk command handler', () => {
   })
 
   it('shows the semantic guard verdict in explain', async () => {
-    const run = vi.fn(async (_binary: string, args: readonly string[]) =>
+    const accepted = vi.fn(async (_binary: string, args: readonly string[]) =>
       args[0] === 'hook'
         ? { code: 0, stdout: 'rtk next\n', stderr: '' }
         : { code: 0, stdout: 'ok', stderr: '' },
     )
-    const handler = makeHandler(baseConfig(), { run })
-    const outcome = await handler.handle({ rawInput: 'explain next build', agent: {} })
-    const text = outcome.kind === 'success' ? (outcome.text ?? '') : ''
-    expect(text).toContain('would rewrite to: rtk next')
-    expect(text).toContain('guard: reject — tokens-dropped')
+    const acceptedOutcome = await makeHandler(baseConfig(), { run: accepted }).handle({
+      rawInput: 'explain next build',
+      agent: {},
+    })
+    const acceptedText = acceptedOutcome.kind === 'success' ? (acceptedOutcome.text ?? '') : ''
+    expect(acceptedText).toContain('would rewrite to: rtk next')
+    expect(acceptedText).toContain('guard: accept — next-build')
+
+    const rejected = vi.fn(async (_binary: string, args: readonly string[]) =>
+      args[0] === 'hook'
+        ? { code: 0, stdout: 'rtk pytest\n', stderr: '' }
+        : { code: 0, stdout: 'ok', stderr: '' },
+    )
+    const rejectedOutcome = await makeHandler(baseConfig(), { run: rejected }).handle({
+      rawInput: 'explain python -m pytest',
+      agent: {},
+    })
+    const rejectedText = rejectedOutcome.kind === 'success' ? (rejectedOutcome.text ?? '') : ''
+    expect(rejectedText).toContain('guard: reject — tokens-dropped')
   })
 })

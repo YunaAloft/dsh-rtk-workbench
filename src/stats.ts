@@ -1,13 +1,16 @@
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
+import type { LifetimeTotals } from './stats-file'
+import { formatTokens } from './tokens'
 
 /** Why one result was not compressed (for the status summary). */
-export type SkipReason = 'size' | 'scope' | 'marked' | 'payload'
+export type SkipReason = 'size' | 'scope' | 'marked' | 'payload' | 'ptc'
 
 /** What a compression pass did to one tool. */
 export interface ToolSaving {
   calls: number
   inBytes: number
   outBytes: number
+  savedTokens: number
 }
 
 /** One session's observed work, independent of rtk's own database. */
@@ -15,6 +18,7 @@ export interface SessionStats {
   compressions: number
   inBytes: number
   outBytes: number
+  savedTokens: number
   compressMs: number
   byTool: Map<string, ToolSaving>
   skipped: Record<SkipReason, number>
@@ -35,9 +39,10 @@ function emptyStats(): SessionStats {
     compressions: 0,
     inBytes: 0,
     outBytes: 0,
+    savedTokens: 0,
     compressMs: 0,
     byTool: new Map(),
-    skipped: { size: 0, scope: 0, marked: 0, payload: 0 },
+    skipped: { size: 0, scope: 0, marked: 0, payload: 0, ptc: 0 },
     errors: { rtk: 0, timeout: 0 },
   }
 }
@@ -47,11 +52,6 @@ export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${String(bytes)} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-/** Rough token estimate (bytes / 4), matching the plugin's README figures. */
-export function estimateTokens(bytes: number): number {
-  return Math.round(bytes / 4)
 }
 
 /**
@@ -85,22 +85,35 @@ export function createStats() {
     return stats
   }
 
-  /** Record one compression pass (or one "rtk had nothing better" outcome). */
+  /**
+   * Record one compression pass.
+   *
+   * @param exec - the call that ran.
+   * @param inBytes - text size before compression.
+   * @param outBytes - text size after compression.
+   * @param savedTokens - estimated tokens saved, priced from the two texts (never
+   *   derived from the byte delta: mixed Chinese and English text has no single
+   *   bytes-per-token ratio).
+   * @param ms - wall time of the round trip.
+   */
   function recordCompress(
     exec: Pick<ToolExecution, 'agent' | 'name'>,
     inBytes: number,
     outBytes: number,
+    savedTokens: number,
     ms: number,
   ): void {
     const stats = bucket(keyOf(exec))
-    const tool = stats.byTool.get(exec.name) ?? { calls: 0, inBytes: 0, outBytes: 0 }
+    const tool = stats.byTool.get(exec.name) ?? { calls: 0, inBytes: 0, outBytes: 0, savedTokens: 0 }
     tool.calls += 1
     tool.inBytes += inBytes
     tool.outBytes += outBytes
+    tool.savedTokens += savedTokens
     stats.byTool.set(exec.name, tool)
     stats.compressions += 1
     stats.inBytes += inBytes
     stats.outBytes += outBytes
+    stats.savedTokens += savedTokens
     stats.compressMs += ms
   }
 
@@ -114,8 +127,14 @@ export function createStats() {
     bucket(keyOf(exec)).errors[kind] += 1
   }
 
-  /** The summary lines `/rtk status` appends. */
-  function formatLines(key: string, counters: RewriteCounters): string[] {
+  /**
+   * The summary lines `/rtk status` appends.
+   *
+   * @param key - session key.
+   * @param counters - rewrite counters owned by the rewrite layer.
+   * @param lifetime - cross-restart totals; `undefined` when persistence is off.
+   */
+  function formatLines(key: string, counters: RewriteCounters, lifetime?: LifetimeTotals): string[] {
     const stats = sessions.get(key)
     if (stats === undefined) return []
     const lines: string[] = []
@@ -126,7 +145,7 @@ export function createStats() {
       const fallback = counters.fallbacks === 0 ? '' : `, ${String(counters.fallbacks)} fallback`
       lines.push(
         `session    : ${String(stats.compressions)} compressions ${formatBytes(stats.inBytes)} → ${formatBytes(stats.outBytes)} ` +
-          `(-${String(pct)}%, ~${String(estimateTokens(saved))} tok), ${(stats.compressMs / 1000).toFixed(1)} s${rewrite}${fallback}`,
+          `(-${String(pct)}%, ~${formatTokens(stats.savedTokens)} tok saved), ${(stats.compressMs / 1000).toFixed(1)} s${rewrite}${fallback}`,
       )
     }
     const skipped = Object.entries(stats.skipped).filter(([, count]) => count > 0)
@@ -139,36 +158,65 @@ export function createStats() {
     if ((counters.guards ?? 0) > 0) {
       lines.push(`guard      : ${String(counters.guards)} rewrite(s) rejected as unsafe (original ran)`)
     }
+    if (lifetime !== undefined && lifetime.compressions > 0) {
+      lines.push(
+        `lifetime   : ${String(lifetime.compressions)} compressions, ~${formatTokens(lifetime.savedTokens)} tok saved since ${lifetime.updatedAt.slice(0, 10)}`,
+      )
+    }
     return lines
   }
 
-  /** Full detail for `/rtk stats`. */
-  function formatReport(key: string, counters: RewriteCounters): string {
+  /**
+   * Full detail for `/rtk stats`.
+   *
+   * @param key - session key.
+   * @param counters - rewrite counters owned by the rewrite layer.
+   * @param lifetime - cross-restart totals; `undefined` when persistence is off.
+   */
+  function formatReport(key: string, counters: RewriteCounters, lifetime?: LifetimeTotals): string {
     const stats = bucket(key)
     const saved = stats.inBytes - stats.outBytes
     const pct = stats.inBytes === 0 ? 0 : Math.round((saved / stats.inBytes) * 100)
     const lines = [
       `session    : ${key}`,
-      `compress   : ${String(stats.compressions)} calls, ${formatBytes(stats.inBytes)} → ${formatBytes(stats.outBytes)} (-${String(pct)}%, ~${String(estimateTokens(saved))} tok), ${(stats.compressMs / 1000).toFixed(1)} s`,
+      `compress   : ${String(stats.compressions)} calls, ${formatBytes(stats.inBytes)} → ${formatBytes(stats.outBytes)} (-${String(pct)}%, ~${formatTokens(stats.savedTokens)} tok saved), ${(stats.compressMs / 1000).toFixed(1)} s`,
       `rewrite    : ${String(counters.calls)} calls, ${String(counters.fallbacks)} fallback${counters.learned.length === 0 ? '' : `, learned ${counters.learned.join(', ')}`}`,
       `guard      : ${String(counters.guards ?? 0)} rejected as unsafe`,
       `skipped    : ${Object.entries(stats.skipped).map(([reason, count]) => `${reason} ${String(count)}`).join(', ')}`,
       `errors     : rtk ${String(stats.errors.rtk)}, timeout ${String(stats.errors.timeout)}`,
     ]
+    if (lifetime !== undefined) {
+      if (lifetime.compressions > 0) {
+        lines.push(
+          `lifetime   : ${String(lifetime.compressions)} compressions, ${formatBytes(lifetime.inBytes)} → ${formatBytes(lifetime.outBytes)}, ~${formatTokens(lifetime.savedTokens)} tok saved (updated ${lifetime.updatedAt})`,
+        )
+        lines.push(
+          `lifetime   : ${String(lifetime.rewrites)} rewrites, ${String(lifetime.fallbacks)} fallback, ${String(lifetime.guards)} guard rejection(s)`,
+        )
+      } else {
+        lines.push('lifetime   : nothing recorded yet')
+      }
+    }
     if (stats.byTool.size > 0) {
       lines.push('by tool    :')
       const rows = [...stats.byTool.entries()].sort((a, b) => b[1].inBytes - a[1].inBytes)
       for (const [name, tool] of rows) {
         lines.push(
-          `  ${name.padEnd(16)} ${String(tool.calls).padStart(3)} calls  ${formatBytes(tool.inBytes)} → ${formatBytes(tool.outBytes)}`,
+          `  ${name.padEnd(16)} ${String(tool.calls).padStart(3)} calls  ${formatBytes(tool.inBytes)} → ${formatBytes(tool.outBytes)}  ~${formatTokens(tool.savedTokens)} tok`,
         )
       }
     }
     return lines.join('\n')
   }
 
-  /** Machine-readable report for `/rtk stats --json`. */
-  function toJson(key: string, counters: RewriteCounters): string {
+  /**
+   * Machine-readable report for `/rtk stats --json`.
+   *
+   * @param key - session key.
+   * @param counters - rewrite counters owned by the rewrite layer.
+   * @param lifetime - cross-restart totals; omitted when persistence is off.
+   */
+  function toJson(key: string, counters: RewriteCounters, lifetime?: LifetimeTotals): string {
     const stats = bucket(key)
     return JSON.stringify(
       {
@@ -178,6 +226,7 @@ export function createStats() {
           inBytes: stats.inBytes,
           outBytes: stats.outBytes,
           savedBytes: stats.inBytes - stats.outBytes,
+          savedTokens: stats.savedTokens,
           ms: Math.round(stats.compressMs),
           byTool: Object.fromEntries(stats.byTool),
         },
@@ -189,6 +238,7 @@ export function createStats() {
         },
         skipped: stats.skipped,
         errors: stats.errors,
+        lifetime: lifetime ?? null,
       },
       null,
       2,

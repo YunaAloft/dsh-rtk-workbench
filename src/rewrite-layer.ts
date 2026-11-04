@@ -52,6 +52,10 @@ export interface RewriteLayerOptions {
   readonly onRtkFailure?: (exec: ToolRunContext) => void
   /** Called once per rtk timeout, for session counters. */
   readonly onTimeout?: (exec: ToolRunContext) => void
+  /** Called once per applied rewrite, for lifetime counters. */
+  readonly onRewrite?: () => void
+  /** Called once per proposal the semantic guard rejected, for lifetime counters. */
+  readonly onGuardRejected?: () => void
   /** How long one rewrite answer is reused; 0 disables the cache. */
   readonly cacheTtlMs?: number
   /**
@@ -240,7 +244,10 @@ export function createRewriteLayer(options: RewriteLayerOptions) {
       if (outcome.kind !== 'rewrite') {
         // A cached rejection still counts: the caller asked for a rewrite and the
         // guard refused it, which is exactly what /rtk stats reports.
-        if (outcome.reason === 'guard') guards += 1
+        if (outcome.reason === 'guard') {
+          guards += 1
+          options.onGuardRejected?.()
+        }
         return await original.call(owner, args, exec)
       }
       // rtk answers with a bare `rtk …`; a bundled-only install has no such PATH
@@ -248,6 +255,7 @@ export function createRewriteLayer(options: RewriteLayerOptions) {
       const target = absolutizeRtk(outcome.command, binary, dialect)
       applied.set(exec, { from: command, to: target, proposal: outcome.command })
       rewrites += 1
+      options.onRewrite?.()
       let result: unknown
       try {
         const next = { ...(args as Record<string, unknown>), command: target }

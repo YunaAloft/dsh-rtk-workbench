@@ -26,6 +26,7 @@ function baseConfig(overrides: Partial<Config> = {}): Config {
     compressThresholdByFamily: { pytest: 512 },
     spillOriginal: 'auto',
     maxSpillBytes: 1024 * 1024,
+    statsPersist: 'off',
     awarenessEnabled: true,
     denyEnabled: false,
     pipelineMode: 'plugin-owned',
@@ -224,15 +225,38 @@ describe('semantic guard in the rewrite layer', () => {
       binary: 'rtk',
       timeoutMs: 100,
       env: {},
+      run: proposalRunner('rtk pytest'),
+    })
+    layer.ensurePatched('bash', undefined)
+
+    await invoke(definition, { command: 'python -m pytest' })
+    await invoke(definition, { command: 'python -m pytest' })
+    expect(seen).toEqual(['python -m pytest', 'python -m pytest'])
+    expect(layer.guardCount()).toBe(2)
+    expect(layer.rewriteCount()).toBe(0)
+    layer.dispose()
+  })
+
+  it('runs the rtk form for next build, whose mapping keeps every argument', async () => {
+    const seen: string[] = []
+    const definition = makeDefinition('bash', async (args: { command: string }) => {
+      seen.push(args.command)
+      return 'ok'
+    })
+    const ctx = fakeCtx(new Map([['bash', definition]]))
+    const layer = createRewriteLayer({
+      ctx,
+      binary: 'rtk',
+      timeoutMs: 100,
+      env: {},
       run: proposalRunner('rtk next'),
     })
     layer.ensurePatched('bash', undefined)
 
     await invoke(definition, { command: 'next build' })
-    await invoke(definition, { command: 'next build' })
-    expect(seen).toEqual(['next build', 'next build'])
-    expect(layer.guardCount()).toBe(2)
-    expect(layer.rewriteCount()).toBe(0)
+    expect(seen).toEqual(['rtk next'])
+    expect(layer.rewriteCount()).toBe(1)
+    expect(layer.guardCount()).toBe(0)
     layer.dispose()
   })
 

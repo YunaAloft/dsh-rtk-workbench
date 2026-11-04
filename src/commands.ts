@@ -6,6 +6,7 @@ import { verifyRewrite } from './rtk/verify'
 import { AWARENESS_SECTION_NAME } from './awareness'
 import { decideTool, dialectOf } from './toolmap'
 import type { RewriteCounters } from './stats'
+import type { LifetimeTotals } from './stats-file'
 
 /** One command outcome, matching the host's `CommandResult` union. */
 export type CommandOutcome =
@@ -52,6 +53,8 @@ export interface CommandContext {
   }
   /** Rewrite counters that live in the rewrite layer. */
   readonly rewrites: () => RewriteCounters
+  /** Cross-restart totals; `undefined` when `statsPersist` is off. */
+  readonly lifetime: () => LifetimeTotals | undefined
   /** How many results a downstream listener had already transformed. */
   readonly foreignTransforms: () => number
   /** Last capability probe outcome. */
@@ -364,7 +367,11 @@ export function createCommandHandler(context: CommandContext) {
           ? verifyRewrite(command, proposal)
           : undefined
       const suffix =
-        guard === undefined ? '' : guard.ok ? ' (guard: accept)' : ` (guard: reject — ${guard.reason})`
+        guard === undefined
+          ? ''
+          : guard.ok
+            ? ` (guard: accept — ${guard.via})`
+            : ` (guard: reject — ${guard.reason})`
       note = `would rewrite to: ${proposal}${suffix}`
     } else {
       const first = (check.stderr || check.stdout).trim().split('\n')[0] ?? ''
