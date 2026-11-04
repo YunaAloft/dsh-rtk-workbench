@@ -101,6 +101,12 @@ function tarBinary() {
 function extract(archive, destination) {
   rmSync(destination, { recursive: true, force: true })
   mkdirSync(destination, { recursive: true })
+  // Windows ships bsdtar, which reads zip; the Linux runners ship GNU tar,
+  // which does not, so the Windows asset is unpacked with `unzip` there.
+  if (archive.endsWith('.zip') && process.platform !== 'win32') {
+    run('unzip', ['-q', '-o', archive, '-d', destination])
+    return
+  }
   run(tarBinary(), ['-xf', archive, '-C', destination])
 }
 

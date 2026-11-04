@@ -134,7 +134,7 @@ jobs:
       - name: vendor the rtk binary for this platform
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: ~/.cache/rtk-workbench
+          path: cache
           key: rtk-vendor-${{ runner.os }}-${{ hashFiles('package.json') }}
       - run: node scripts/build-vendor.mjs
       - run: pnpm pack
