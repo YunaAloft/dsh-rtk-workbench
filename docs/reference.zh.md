@@ -115,7 +115,7 @@ lifetime   : 2 831 compressions, ~1.2M tok saved since 2026-11-05
 | 环境 | 改写 | 压缩 | 恢复 | 说明 |
 |---|---|---|---|---|
 | Linux x64/arm64 原生 | 完整 | 完整 | 完整 | 首选：bash 原生、rtk 原生、库可写 |
-| macOS x64/arm64 原生 | 完整 | 完整 | 完整 | 同 Linux；CI 待跑 |
+| macOS x64/arm64 原生 | 完整 | 完整 | 完整 | 同 Linux；单测在 CI 的 macOS runner 上跑，两个 macOS 二进制由 `binary` job 冒烟 |
 | Windows + `danger-full-access` | 完整 | 完整 | 完整 | 维护者机器实测；`ls`/`grep` 改写可用 |
 | Windows + `workspace-write` | **跳过** | 完整 | spill | 宿主拒绝 rtk 派生子进程（`os error 5`）；`rewriteSandboxGuard: off` 强制并会失败 |
 | Windows + `read-only` | **跳过** | 完整 | spill | 同样的拒绝；且没有可写目录 |

@@ -22,7 +22,7 @@
 
 ```sh
 node scripts/verify-host.mjs                 # 探测本机安装的宿主
-node scripts/verify-host.mjs --host-version 0.2.1-rc.5
+node scripts/verify-host.mjs --host-version 0.2.2-rc.1
 node scripts/verify-host.mjs --self-test      # 自测范围匹配器
 ```
 

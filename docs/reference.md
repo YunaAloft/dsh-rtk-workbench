@@ -116,7 +116,7 @@ The matrix describes the plugin's *observable* behaviour. "skipped" always means
 | Environment | Rewrite | Compress | Recover | Notes |
 |---|---|---|---|---|
 | Linux x64/arm64 native | full | full | full | Preferred: bash native, rtk native, store writable |
-| macOS x64/arm64 native | full | full | full | Same as Linux; CI pending |
+| macOS x64/arm64 native | full | full | full | Same as Linux; the unit suite runs on macOS in CI, and both macOS binaries are smoked by the `binary` jobs |
 | Windows + `danger-full-access` | full | full | full | Verified on the maintainer's machine; `ls`/`grep` rewrites work |
 | Windows + `workspace-write` | **skipped** | full | spill | The host denies rtk its child process (`os error 5`); `rewriteSandboxGuard: off` forces and will fail |
 | Windows + `read-only` | **skipped** | full | spill | Same denial; nothing is writable |

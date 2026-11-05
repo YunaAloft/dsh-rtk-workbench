@@ -23,6 +23,7 @@ The savings become visible: one token estimate everywhere, a cross-restart ledge
 - README defaults to Chinese (`README.en.md` keeps English) and was trimmed from 149 to 108 lines; the earlier per-case table moved into the benchmark document.
 - `dshTarget` is `0.2.2-rc.1`. The verified-host row was added to `docs/compatibility.md`.
 - Configuration keys and the `/rtk` command surface are frozen from this release: further keys are additive only.
+- **Distribution only, not in the package:** the GitHub release asset now also carries `docs/`, `CHANGELOG.md` and `README.en.md` (it previously shipped a README whose relative links pointed at files the tarball did not contain), and the packaging script fails loudly when a staged path disappears. The npm tarball already contained them, so no package content changed and no new version was cut.
 
 ## [0.2.0] — 2026-11-03
 

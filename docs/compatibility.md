@@ -22,7 +22,7 @@ What this plugin has actually been checked against, with the evidence for each r
 
 ```sh
 node scripts/verify-host.mjs                 # detect the installed host
-node scripts/verify-host.mjs --host-version 0.2.1-rc.5
+node scripts/verify-host.mjs --host-version 0.2.2-rc.1
 node scripts/verify-host.mjs --self-test      # exercise the range matcher
 ```
 
