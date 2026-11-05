@@ -6,7 +6,7 @@
 
 | 宿主（`@deepseek-ai/dsh`） | rtk | 验证日期 | 证据 | 说明 |
 |---|---|---|---|---|
-| `0.2.2-rc.1` | `1.1.0` | 2026-11-05 | `pnpm typecheck`（host + client 两个编译面）；`pnpm test`（18 文件、200 用例）；`check-manifest`；`check-docs`；打包产物的 `smoke-pack`；维护者桌面冒烟（药丸 + 浮层、改写、压缩、`recall`） | 1.0.0 目标版本 |
+| `0.2.2-rc.1` | `1.1.0` | 2026-11-05 | `pnpm typecheck`（host + client 两个编译面）；`pnpm test`（17 文件、200 用例）；`check-manifest`；`check-docs`；打包产物的 `smoke-pack`；维护者桌面冒烟（药丸 + 浮层、改写、压缩、`recall`） | 1.0.0 目标版本 |
 | `0.2.1-rc.5` | `1.1.0` | 2026-11-03 | `pnpm typecheck`；`pnpm test`（12 个文件、145 个用例）；`check-manifest`；`check-docs`；维护者 Windows 11 冒烟（`/rtk status`、改写、压缩、recall） | 0.2.0 目标版本，历史记录 |
 | `0.2.1-rc.3` / `rc.4` | `1.1.0` | 2026-11-01 | M0 headless 实测：rtk 退出码 0/1/2/3、`hook claude` 往返、沙箱行为 | 0.1.x 线，历史记录 |
 

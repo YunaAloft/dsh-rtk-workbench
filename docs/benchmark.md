@@ -17,7 +17,7 @@ The script builds a throwaway fixture repository (40 commits, a dirty worktree, 
 |---|---|
 | OS | Windows 11 |
 | rtk | `1.1.0` |
-| Plugin | `1.0.0` |
+| Plugin | `1.0.1` |
 | Node | 24.22 |
 | Pipeline | plugin-owned (`rtk:posthook`), injected through `RTK_CONFIG_DIR` |
 
@@ -26,16 +26,18 @@ The script builds a throwaway fixture repository (40 commits, a dirty worktree, 
 | Case | Path | Before | After | Saved | Est. tokens before → after |
 |---|---|---:|---:|---:|---:|
 | `git status` | rewrite | 377 B | 47 B | −87.5 % | 95 → 12 |
-| `git log -n 20` | rewrite | 3 578 B | 1 699 B | −52.5 % | 895 → 425 |
+| `git log -n 20` | rewrite | 3 578 B | 1 698 B | −52.5 % | 895 → 425 |
 | `git diff` | rewrite | 20 511 B | 6 945 B | −66.1 % | 5 128 → 1 737 |
 | `ls -la` | rewrite | — | — | skipped | — |
 | `grep -rn TODO src` | rewrite | — | — | skipped | — |
 | pytest output, 2 001 lines | compress | 89 505 B | 11 287 B | −87.4 % | 22 377 → 2 822 |
 | application log, 5 000 lines | compress | 272 640 B | 13 633 B | −95.0 % | 68 160 → 3 409 |
 | `package-lock.json` (read shape) | compress | 76 896 B | 4 654 B | −93.9 % | 19 224 → 1 164 |
-| **Total** | | **463 507 B** | **38 265 B** | **−91.7 %** | **115 879 → 9 569** |
+| **Total** | | **463 507 B** | **38 264 B** | **−91.7 %** | **115 879 → 9 569** |
 
 The two `skipped` rows are POSIX commands that Windows does not ship: `rtk ls` tries to spawn `ls` and rtk reports `program not found`. The skip is visible in the table instead of failing the run — a benchmark that silently drops cases would be worse than one that names them.
+
+Re-running the script can move the totals by a byte or two, because rtk formats its own output. Treat the percentages as the stable figure and the byte counts as one run's sample.
 
 ## What the token column means
 

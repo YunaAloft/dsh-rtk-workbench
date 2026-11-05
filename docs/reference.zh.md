@@ -1,4 +1,4 @@
-# dsh-rtk-workbench 参考手册（1.0.0）
+# dsh-rtk-workbench 参考手册（1.0.1）
 
 适用：DSH `0.2.2-rc.1`、rtk `1.1.0`、Node `^22.19.0 || >=24`。安装后需要重启 `dsh web`（bundle 变更不是刷新页面）。
 
@@ -108,7 +108,7 @@ lifetime   : 2 831 compressions, ~1.2M tok saved since 2026-11-05
 | DeepSeek Harness | `0.2.2-rc.1`（目标；`package.json` 的 `dshTarget`） |
 | rtk | `1.1.0`（内置；`dshRtkVersion`） |
 | Node | `^22.19.0 || >=24` |
-| 插件 | `1.0.0` |
+| 插件 | `1.0.1` |
 
 下表描述插件的**可观察行为**；`skipped` 一律指"在 spawn 之前就拒绝"，不是"试了但静默失败"。
 

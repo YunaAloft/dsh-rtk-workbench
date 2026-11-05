@@ -1,4 +1,4 @@
-# dsh-rtk-workbench reference (1.0.0)
+# dsh-rtk-workbench reference (1.0.1)
 
 Applies to DSH `0.2.2-rc.1`, rtk `1.1.0`, Node `^22.19.0 || >=24`. Restart `dsh web` after installing — a bundle change is not a page refresh.
 
@@ -108,7 +108,7 @@ Every key can be overridden from `cordis.patch.yml`; values are validated at loa
 | DeepSeek Harness | `0.2.2-rc.1` (target; `dshTarget` in `package.json`) |
 | rtk | `1.1.0` (bundled; `dshRtkVersion`) |
 | Node | `^22.19.0 || >=24` |
-| Plugin | `1.0.0` |
+| Plugin | `1.0.1` |
 
 The matrix describes the plugin's *observable* behaviour. "skipped" always means
 "refused before spawning", never "tried and failed silently".

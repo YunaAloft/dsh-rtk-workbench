@@ -6,7 +6,7 @@ What this plugin has actually been checked against, with the evidence for each r
 
 | Host (`@deepseek-ai/dsh`) | rtk | Checked on | Evidence | Notes |
 |---|---|---|---|---|
-| `0.2.2-rc.1` | `1.1.0` | 2026-11-05 | `pnpm typecheck` (host + client faces); `pnpm test` (18 files, 200 tests); `check-manifest`; `check-docs`; `smoke-pack` on the packed tarball; maintainer desktop smoke (pill + overlay, rewrite, compression, `recall`) | 1.0.0 target |
+| `0.2.2-rc.1` | `1.1.0` | 2026-11-05 | `pnpm typecheck` (host + client faces); `pnpm test` (17 files, 200 tests); `check-manifest`; `check-docs`; `smoke-pack` on the packed tarball; maintainer desktop smoke (pill + overlay, rewrite, compression, `recall`) | 1.0.0 target |
 | `0.2.1-rc.5` | `1.1.0` | 2026-11-03 | `pnpm typecheck`; `pnpm test` (12 files, 145 tests); `check-manifest`; `check-docs`; maintainer smoke on Windows 11 (`/rtk status`, rewrite, compression, recall) | 0.2.0 target, historical |
 | `0.2.1-rc.3` / `rc.4` | `1.1.0` | 2026-11-01 | M0 headless findings: rtk exit codes 0/1/2/3, `hook claude` round trip, sandbox behaviour | 0.1.x line, historical |
 

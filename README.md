@@ -68,7 +68,7 @@ flowchart LR
 
 ## Measured effect
 
-确定性基准合计 **463 507 B → 38 265 B（−91.7 %）**，约 115.9k → 9.6k 估算 token。完整表格、复现方法与「这些数字不能证明什么」见 [基准测试](./docs/benchmark.zh.md)；token 为估算值，不是服务商计费口径。
+确定性基准合计 **463 507 B → 38 264 B（−91.7 %）**，约 115.9k → 9.6k 估算 token。完整表格、复现方法与「这些数字不能证明什么」见 [基准测试](./docs/benchmark.zh.md)；token 为估算值，不是服务商计费口径。
 
 ## Documentation
 
