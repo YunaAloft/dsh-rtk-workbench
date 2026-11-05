@@ -45,14 +45,14 @@ You can also install the GitHub release asset `dsh-rtk-workbench-<platform>.tgz`
 ```
 /rtk status     # binary, pipeline, switches, this session's savings
 /rtk stats      # full report; --json for machines
-/rtk off ui     # hide the savings pill above the composer
+/rtk off ui     # hide the savings pill below the composer
 ```
 
 Then work as usual: `git status` in a large repository becomes a compact listing; `cat` on a 100 KB log is condensed and points at `rtk recall <hash>` — or at a spilled file the sandbox can read. `status`, `stats`, `tools`, `explain`, `doctor` and `recall` are documented in the reference manual.
 
 ## How it works
 
-Rewriting wraps `ToolDefinition.execute` (it does not re-dispatch), keeping the registry's signal fusion and accounting intact; compression runs in `tools/post-execute`, always after `await next()`, so safety plugins and the spill policy still apply. Browser side, the host half serves one read-only `GET /api/rtk-workbench/status`, and the browser half renders `saved X token · −N%` above the composer with a details overlay behind it.
+Rewriting wraps `ToolDefinition.execute` (it does not re-dispatch), keeping the registry's signal fusion and accounting intact; compression runs in `tools/post-execute`, always after `await next()`, so safety plugins and the spill policy still apply. Browser side, the host half serves one read-only `GET /api/rtk-workbench/status`, and the browser half renders `saved X token · ↓N%` below the composer (in its dock row, beside the host's activity/usage pills) with a details overlay behind it.
 
 ```mermaid
 flowchart LR

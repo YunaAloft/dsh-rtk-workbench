@@ -45,14 +45,14 @@ dsh plugin --profile web add dsh-rtk-workbench
 ```
 /rtk status     # 二进制、pipeline、开关、本会话省量
 /rtk stats      # 完整报告；--json 给机器读
-/rtk off ui     # 隐藏输入框上方的省量药丸
+/rtk off ui     # 隐藏输入框下方的省量药丸
 ```
 
 之后正常干活：大仓库里的 `git status` 变成紧凑结果；`cat` 一个 100 KB 日志会被压缩并指向 `rtk recall <hash>`，沙箱里则给出可直接读的落盘路径。`status`、`stats`、`tools`、`explain`、`doctor`、`recall` 的完整说明在参考手册。
 
 ## How it works
 
-改写靠包装 `ToolDefinition.execute`（不是重派发），保留注册表的信号融合与记账；压缩在 `tools/post-execute` 里先 `await next()` 再做内容替换，因此安全插件与 spill 策略照常生效。界面侧，宿主半提供只读 `GET /api/rtk-workbench/status`，浏览器半在输入框上方显示「省 X token · −N%」，点开是明细浮层。
+改写靠包装 `ToolDefinition.execute`（不是重派发），保留注册表的信号融合与记账；压缩在 `tools/post-execute` 里先 `await next()` 再做内容替换，因此安全插件与 spill 策略照常生效。界面侧，宿主半提供只读 `GET /api/rtk-workbench/status`，浏览器半在输入框下方（composer 的 dock 行，与宿主的 activity/usage 同一排）显示「省 X token · ↓N%」，点开是明细浮层。
 
 ```mermaid
 flowchart LR
