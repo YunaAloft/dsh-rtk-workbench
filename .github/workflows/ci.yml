@@ -99,7 +99,10 @@ jobs:
           set -euo pipefail
           VERSION=$(node -p "require('./package.json').dshRtkVersion")
           URL="https://github.com/rtk-ai/rtk/releases/download/v${VERSION}/${{ matrix.asset }}"
-          curl -fsSL -o asset "$URL"
+          # GitHub's release CDN answers 504 under load often enough that a
+          # single attempt turns main red for no reason; retry the transient
+          # classes before failing the job.
+          curl -fsSL --retry 3 --retry-delay 2 --retry-connrefused -o asset "$URL"
           mkdir -p extracted
           # The Windows runner's `tar` is GNU tar, which cannot read zip, so the
           # zip asset is unpacked with `unzip` (bundled with Git for Windows).

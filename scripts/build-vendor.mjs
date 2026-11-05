@@ -53,17 +53,36 @@ function run(command, commandArgs, options = {}) {
   if (result.status !== 0) throw new Error(`${command} ${commandArgs.join(' ')} exited ${String(result.status)}`)
 }
 
-/** Download one URL into the cache, returning the local path. */
+/**
+ * Download one URL into the cache, returning the local path.
+ *
+ * GitHub's release CDN answers 5xx under load often enough that one attempt
+ * makes a release build fail for no reason, so transient server errors are
+ * retried a few times before the download is declared broken.
+ */
 async function fetchAsset(name) {
   const target = join(CACHE, name)
   if (existsSync(target) && statSync(target).size > 0) return target
   mkdirSync(CACHE, { recursive: true })
-  const response = await fetch(`${RELEASE}/${name}`, { redirect: 'follow' })
-  if (!response.ok) throw new Error(`download ${name} failed: ${String(response.status)}`)
-  const bytes = Buffer.from(await response.arrayBuffer())
-  writeFileSync(target, bytes)
-  console.log(`  downloaded ${name} (${(bytes.length / 1048576).toFixed(1)} MB)`)
-  return target
+  const attempts = 3
+  let lastError
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await fetch(`${RELEASE}/${name}`, { redirect: 'follow' })
+      if (!response.ok) throw new Error(`download ${name} failed: ${String(response.status)}`)
+      const bytes = Buffer.from(await response.arrayBuffer())
+      writeFileSync(target, bytes)
+      console.log(`  downloaded ${name} (${(bytes.length / 1048576).toFixed(1)} MB)`)
+      return target
+    } catch (error) {
+      lastError = error
+      if (attempt < attempts) {
+        console.log(`  retrying ${name} (${attempt}/${attempts}): ${error instanceof Error ? error.message : String(error)}`)
+        await new Promise((done) => setTimeout(done, 1000 * attempt))
+      }
+    }
+  }
+  throw lastError
 }
 
 /** Verify every cached asset against the release checksums. */
