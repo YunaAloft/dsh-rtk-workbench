@@ -139,3 +139,6 @@ jobs:
       - run: node scripts/build-vendor.mjs
       - run: pnpm pack
       - run: node scripts/smoke-pack.mjs dsh-rtk-workbench-*.tgz
+      # The GitHub-shape tarball must carry the same documentation: its README
+      # links to docs/ and CHANGELOG.md, and both used to be missing here.
+      - run: node scripts/smoke-pack.mjs dist/github/dsh-rtk-workbench-linux-x64.tgz

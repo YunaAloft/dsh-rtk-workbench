@@ -206,9 +206,28 @@ function packFatTarball(platform, vendorBinary) {
   rmSync(stage, { recursive: true, force: true })
   mkdirSync(stage, { recursive: true })
   const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
-  for (const entry of ['lib', 'locale', 'cordis.patch.yml', 'icon.svg', 'README.md', 'README-zh.md', 'LICENSE', 'licenses']) {
+  // Everything the published package promises to carry, minus the platform
+  // packages: the fat tarball *is* the main package plus `vendor/`.
+  const staged = [
+    'lib',
+    'locale',
+    'docs',
+    'cordis.patch.yml',
+    'icon.svg',
+    'README.md',
+    'README.en.md',
+    'CHANGELOG.md',
+    'LICENSE',
+    'licenses',
+  ]
+  // Fail loud: a rename in the repository must not silently drop a file from
+  // the release asset (README-zh.md was renamed and the entry went quiet).
+  const missing = staged.filter((entry) => !existsSync(join(ROOT, entry)))
+  if (missing.length > 0) {
+    throw new Error(`fat tarball staging is missing ${missing.join(', ')} — update this list or the repository layout`)
+  }
+  for (const entry of staged) {
     const source = join(ROOT, entry)
-    if (!existsSync(source)) continue
     if (statSync(source).isDirectory()) {
       // Node's own recursive copy: shelling out to `cp` breaks under cmd.exe,
       // and on POSIX it would be a fork per file anyway.

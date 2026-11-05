@@ -54,6 +54,21 @@ try {
   check(existsSync(join(root, 'cordis.patch.yml')), 'cordis.patch.yml is packed')
   check(existsSync(join(root, 'locale/zh.json')), 'locale/zh.json is packed')
 
+  // Documentation ships with the package: the README links to these documents,
+  // and a release asset that quietly drops them ships dead links.
+  for (const relative of [
+    'docs/reference.md',
+    'docs/reference.zh.md',
+    'docs/benchmark.md',
+    'docs/benchmark.zh.md',
+    'docs/compatibility.md',
+    'docs/compatibility.zh.md',
+    'CHANGELOG.md',
+    'README.en.md',
+  ]) {
+    check(existsSync(join(root, relative)), `${relative} is packed`)
+  }
+
   // The host half imports its peer dependency (`@deepseek-ai/schemastery`) as a
   // bare specifier; a profile provides it. Outside a profile we link the copy the
   // repository installed, which is exactly what the host would resolve.
