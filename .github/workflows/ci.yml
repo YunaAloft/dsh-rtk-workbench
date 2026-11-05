@@ -16,18 +16,44 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  scope:
+    name: scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      unit: ${{ steps.pick.outputs.unit }}
+      binary: ${{ steps.pick.outputs.binary }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: pick
+        # GitHub's macOS arm64 pool cancelled a queued job after fifteen minutes
+        # twice in one day. Pull requests therefore skip that pool; main pushes
+        # and manual runs keep the full matrix. The matrices themselves live in
+        # .github/ci-matrix.json so this job and the jobs below cannot drift.
+        run: |
+          set -euo pipefail
+          collection="${{ github.event_name == 'pull_request' && 'pr' || 'all' }}"
+          {
+            echo "unit=$(jq -c ".unit.${collection}" .github/ci-matrix.json)"
+            # The binary matrix is a list of objects, so it travels as the
+            # {"include": [...]} shape that `matrix:` accepts directly.
+            echo "binary=$(jq -c "{include: .binary.${collection}}" .github/ci-matrix.json)"
+          } >> "$GITHUB_OUTPUT"
+
   unit:
     name: unit (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    needs: scope
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        # `macos-13`/`macos-14` are retired. Plain `macos-latest` is arm64; the
-        # x64 macOS image (`macos-15-intel`) is deliberately not in this matrix —
-        # its queue is long and the JS suite has no arch-specific behaviour. The
-        # darwin-x64 *binary* is still exercised by the binary job below.
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # `macos-13`/`macos-14` are retired. Plain `macos-latest` is arm64 and the
+        # last entry in .github/ci-matrix.json's "all" set; the x64 macOS image
+        # (`macos-15-intel`) is deliberately not a unit target — its queue is long
+        # and the JS suite has no arch-specific behaviour. The darwin-x64 *binary*
+        # is still exercised by the binary job below.
+        os: ${{ fromJSON(needs.scope.outputs.unit) }}
     steps:
       # Actions are pinned to immutable commit SHAs (with the human version in a
       # comment) so a moving major tag cannot change what runs; Dependabot
@@ -54,38 +80,13 @@ jobs:
   binary:
     name: bundled binary (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
+    needs: scope
     timeout-minutes: 10
+    # Same macOS arm64 capacity rule as the unit job: the pull_request collection
+    # in .github/ci-matrix.json omits darwin-arm64.
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux-x64
-            asset: rtk-x86_64-unknown-linux-musl.tar.gz
-            bin: rtk
-            out: rtk-bin
-          - os: ubuntu-24.04-arm
-            platform: linux-arm64
-            asset: rtk-aarch64-unknown-linux-gnu.tar.gz
-            bin: rtk
-            out: rtk-bin
-          - os: macos-15-intel
-            platform: darwin-x64
-            asset: rtk-x86_64-apple-darwin.tar.gz
-            bin: rtk
-            out: rtk-bin
-          - os: macos-latest
-            platform: darwin-arm64
-            asset: rtk-aarch64-apple-darwin.tar.gz
-            bin: rtk
-            out: rtk-bin
-          - os: windows-latest
-            platform: win32-x64
-            asset: rtk-x86_64-pc-windows-msvc.zip
-            bin: rtk.exe
-            # Windows refuses to spawn a file with no extension, so the smoke
-            # binary keeps its `.exe` here.
-            out: rtk-bin.exe
+      matrix: ${{ fromJSON(needs.scope.outputs.binary) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -98,7 +99,7 @@ jobs:
         # the download (and its CDN flakiness) from almost every run. The cache is
         # only saved after the job succeeds, so a corrupt download cannot be
         # cached: it would fail extraction or the smoke step first.
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: rtk-asset
           key: rtk-asset-${{ matrix.platform }}-${{ hashFiles('package.json') }}
@@ -151,7 +152,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: node node_modules/tsdown/dist/run.mjs
       - name: vendor the rtk binary for this platform
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: cache
           key: rtk-vendor-${{ runner.os }}-${{ hashFiles('package.json') }}
