@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { panelSections, pillText, pillVisible, readStatus, toneOf, type Translate } from '../src/client/model'
+import { panelSections, pillText, pillVisible, readStatus, reduction, toneOf, type Translate } from '../src/client/model'
 import { dictionaries } from '../src/client/dict'
 
 /** A translator over the real dictionaries, so tests see what users read. */
@@ -111,8 +111,18 @@ describe('pillVisible', () => {
 describe('pillText', () => {
   it('names the unit, because a bare number reads like usage', () => {
     const text = pillText(readStatus(payload()), undefined, translate('zh'))
-    expect(text.primary).toBe('省 12.4k token · -81%')
+    expect(text.primary).toBe('省 12.4k token · ↓81%')
     expect(text.secondary).toContain('12 次压缩')
+  })
+
+  it('states the direction with an arrow instead of a minus sign', () => {
+    // A leading minus reads as a loss next to "saved … token", and the ASCII
+    // hyphen does not match the typographic minus the docs use.
+    const text = pillText(readStatus(payload()), undefined, translate('en'))
+    expect(text.primary).not.toContain('-')
+    expect(text.primary).toContain('↓81%')
+    expect(reduction(0.3949)).toBe('↓39%')
+    expect(reduction(-1)).toBe('↓0%')
   })
 
   it('says ready before anything was compressed', () => {
@@ -140,8 +150,11 @@ describe('panelSections', () => {
     expect(titles).toEqual(['健康', '本会话', '累计（跨重启）', '按工具', '最近事件'])
     const session = sections[1]
     expect(session?.rows[0]?.value).toBe('≈12.4k token')
+    expect(session?.rows[1]?.value).toContain('降幅 81%')
+    expect(session?.rows[1]?.value).not.toContain('-81')
     expect(session?.note).toContain('size 9')
     expect(sections[3]?.rows[0]?.label).toBe('bash')
+    expect(sections[4]?.rows[0]?.value).toContain('↓90%')
   })
 
   it('keeps the last good numbers visible when a poll fails', () => {

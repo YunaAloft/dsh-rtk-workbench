@@ -1,6 +1,6 @@
 {
   "name": "dsh-rtk-workbench",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Cuts tool-output tokens in DeepSeek Harness: command rewriting, rtk-powered output compression and a prompt section, with rtk bundled.",
   "type": "module",
   "main": "lib/index.js",

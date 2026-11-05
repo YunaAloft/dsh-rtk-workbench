@@ -2,6 +2,18 @@
 
 All notable changes to `dsh-rtk-workbench`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] — 2026-11-06
+
+A copy fix in the web UI, plus the documentation refresh that 1.0.0's npm page could not show.
+
+### Fixed
+
+- The savings pill reads `saved 12.4k token · ↓81%` instead of `-81%`. A leading minus next to "saved … token" reads as a loss, and the ASCII hyphen did not match the typographic minus the documents use. The overlay labels the same figure as a reduction (`降幅 81%`) instead of parenthesising it, and the recent-event rows use the same arrow.
+
+### Changed
+
+- npm's rendered README now matches the repository: the tightened 97-line README, the language-specific header (the Chinese one states `自带 rtk`), and the expanded acronym moved out of the tagline into the paragraph that explains rtk. npm snapshots the README at publish time, so this could not reach the 1.0.0 page without a release.
+
 ## [1.0.0] — 2026-11-05
 
 The savings become visible: one token estimate everywhere, a cross-restart ledger, and a web pill that shows what this session saved without running a command. 1.0.0 freezes the configuration keys and the command surface.

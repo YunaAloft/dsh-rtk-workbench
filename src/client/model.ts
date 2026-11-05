@@ -225,9 +225,22 @@ export function toneOf(view: StatusView | undefined, error: string | undefined):
   return 'ok'
 }
 
-/** Percentage string for one 0–1 ratio. */
-function percent(ratio: number): string {
-  return `-${String(Math.round(Math.max(0, Math.min(1, ratio)) * 100))}%`
+/** Whole percentage, 0–100, for one 0–1 ratio. */
+function percentOf(ratio: number): number {
+  return Math.round(Math.max(0, Math.min(1, ratio)) * 100)
+}
+
+/**
+ * Reduction indicator for the pill and the event list.
+ *
+ * A leading minus (`-39%`) reads as a loss next to "saved 12.4k token", and the
+ * ASCII hyphen does not match the typographic minus the docs use. A downward
+ * arrow states the direction without either problem.
+ *
+ * @param ratio - fraction of bytes that did not reach the model, 0–1.
+ */
+export function reduction(ratio: number): string {
+  return `↓${String(percentOf(ratio))}%`
 }
 
 /**
@@ -275,7 +288,7 @@ export function pillText(view: StatusView | undefined, error: string | undefined
     rewrites: view.rewrites.calls,
   })
   return {
-    primary: `${t('pill.saved', { tokens: formatTokens(session.savedTokens) })} · ${percent(session.ratio)}`,
+    primary: `${t('pill.saved', { tokens: formatTokens(session.savedTokens) })} · ${reduction(session.ratio)}`,
     secondary,
   }
 }
@@ -347,7 +360,10 @@ export function panelSections(
         ? [{ label: t('panel.none'), value: '' }]
         : [
             { label: t('panel.savedTokens'), value: `≈${formatTokens(session.savedTokens)} token` },
-            { label: t('panel.savedBytes'), value: `${formatBytes(session.inBytes)} → ${formatBytes(session.outBytes)} (${percent(session.ratio)})` },
+            {
+              label: t('panel.savedBytes'),
+              value: `${formatBytes(session.inBytes)} → ${formatBytes(session.outBytes)} · ${t('panel.reduction')} ${String(percentOf(session.ratio))}%`,
+            },
             {
               label: t('panel.calls'),
               value: t('panel.callsValue', {
@@ -405,7 +421,7 @@ export function panelSections(
             label: new Date(event.at).toLocaleTimeString(),
             value:
               event.kind === 'compress'
-                ? `${event.tool} · ${percent(event.ratio ?? 0)}`
+                ? `${event.tool} · ${reduction(event.ratio ?? 0)}`
                 : `${event.tool} · ${t('panel.skippedReason', { reason: event.reason ?? '?' })}`,
             tone: event.kind === 'compress' ? 'ok' : 'off',
           })),

@@ -32,7 +32,7 @@ dsh plugin --profile <profile> add dsh-rtk-workbench
 | `/rtk on\|off <rewrite\|compress\|ui>` | 本会话内临时开关；`/rtk off compress` 可用来排查另一个结果变换器，`/rtk off ui` 隐藏界面药丸 |
 | `/rtk help [topic]` | 命令列表；`topic` 可取 `pipeline`、`sandbox`、`recovery`、`config` |
 
-**界面药丸与浮层。** Web GUI 里插件在输入框上方渲染一个药丸——`省 12.4k token · −81%`——旁边是压缩与改写次数，守卫计数只在拒绝过之后出现。三种颜色：正常、警示（rtk 不可用或注入的 pipeline 回退）、灰色（压缩已关）。点开是浮层：健康、本会话、累计、按工具、跳过原因、最近三条事件、运行自检与复制诊断。药丸在拿到第一份状态之前不显示，可用 `uiPill: false` 或 `/rtk off ui` 关掉。
+**界面药丸与浮层。** Web GUI 里插件在输入框上方渲染一个药丸——`省 12.4k token · ↓81%`——旁边是压缩与改写次数，守卫计数只在拒绝过之后出现。三种颜色：正常、警示（rtk 不可用或注入的 pipeline 回退）、灰色（压缩已关）。点开是浮层：健康、本会话、累计、按工具、跳过原因、最近三条事件、运行自检与复制诊断。药丸在拿到第一份状态之前不显示，可用 `uiPill: false` 或 `/rtk off ui` 关掉。
 
 浏览器半只读一条宿主半挂在该 profile webserver 上的路由：`GET /api/rtk-workbench/status`（只有计数与枚举，没有命令原文、输出或路径）与 `POST /api/rtk-workbench/doctor`（跑与 `/rtk doctor` 相同的自检）。headless profile 没有 webserver，这条路由自然不存在。
 
