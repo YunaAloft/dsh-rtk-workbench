@@ -93,16 +93,32 @@ jobs:
           node-version: 22
       # No `pnpm install`: scripts/smoke-rtk.mjs only uses Node built-ins, and
       # skipping the install keeps this job fast and independent of the registry.
+      - name: cache the rtk release asset
+        # The asset is content-stable for a given rtk version, so a hit removes
+        # the download (and its CDN flakiness) from almost every run. The cache is
+        # only saved after the job succeeds, so a corrupt download cannot be
+        # cached: it would fail extraction or the smoke step first.
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: rtk-asset
+          key: rtk-asset-${{ matrix.platform }}-${{ hashFiles('package.json') }}
       - name: fetch the bundled rtk for this platform
         shell: bash
         run: |
           set -euo pipefail
           VERSION=$(node -p "require('./package.json').dshRtkVersion")
           URL="https://github.com/rtk-ai/rtk/releases/download/v${VERSION}/${{ matrix.asset }}"
-          # GitHub's release CDN answers 504 under load often enough that a
-          # single attempt turns main red for no reason; retry the transient
-          # classes before failing the job.
-          curl -fsSL --retry 3 --retry-delay 2 --retry-connrefused -o asset "$URL"
+          mkdir -p rtk-asset
+          if [ -f "rtk-asset/${{ matrix.asset }}" ]; then
+            echo "using the cached asset"
+            cp "rtk-asset/${{ matrix.asset }}" asset
+          else
+            # GitHub's release CDN answers 504 under load; give it a two-minute
+            # window (5 attempts, 5 s apart) and also retry connection-level
+            # failures, which the default retry set ignores.
+            curl -fsSL --retry 5 --retry-delay 5 --retry-max-time 120 --retry-all-errors -o asset "$URL"
+            cp asset "rtk-asset/${{ matrix.asset }}"
+          fi
           mkdir -p extracted
           # The Windows runner's `tar` is GNU tar, which cannot read zip, so the
           # zip asset is unpacked with `unzip` (bundled with Git for Windows).

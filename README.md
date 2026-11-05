@@ -13,13 +13,13 @@
 </p>
 
 <p align="center">
-  <em>把 <a href="https://github.com/rtk-ai/rtk">rtk（Rust Token Killer）</a> 接进 DeepSeek Harness，二进制一起带上。</em><br>
+  <em>把 <a href="https://github.com/rtk-ai/rtk">rtk</a> 接进 DeepSeek Harness，二进制一起带上。</em><br>
   <sub>能改写的改写 · 改不动的压缩 · 省了多少看得见</sub>
 </p>
 
 ## Why this exists
 
-rtk 站在 agent 和工具之间：把命令改写成过滤版，并在模型读到工具输出之前先压一遍。官方为 20 个 agent 写了适配层，DSH 不在其中；社区已有的 DSH 插件也只补了「改写」或「裁剪」的一半。这个插件把三件事一次补齐：**改写**（委托 rtk 的规则）、**压缩**（真 rtk 方法链，不重造引擎）、**可见**（省下的 token 进统计，也在界面上一眼看到）。失败路径全部开放：rtk 缺失、超时或返回意料之外的东西时，工具调用和没装这个插件时一样。它不注册新工具、不替换 shell 执行器、不碰模型 API。
+rtk（Rust Token Killer）站在 agent 和工具之间：把命令改写成过滤版，并在模型读到工具输出之前先压一遍。官方为 20 个 agent 写了适配层，DSH 不在其中；社区已有的 DSH 插件也只补了「改写」或「裁剪」的一半。这个插件把三件事一次补齐：**改写**（委托 rtk 的规则）、**压缩**（真 rtk 方法链，不重造引擎）、**可见**（省下的 token 进统计，也在界面上一眼看到）。失败路径全部开放：rtk 缺失、超时或返回意料之外的东西时，工具调用和没装这个插件时一样。它不注册新工具、不替换 shell 执行器、不碰模型 API。
 
 ## What you get
 

@@ -13,13 +13,13 @@
 </p>
 
 <p align="center">
-  <em><a href="https://github.com/rtk-ai/rtk">rtk (Rust Token Killer)</a> wired into DeepSeek Harness, binary included.</em><br>
+  <em><a href="https://github.com/rtk-ai/rtk">rtk</a> wired into DeepSeek Harness, binary included.</em><br>
   <sub>rewrite what rtk can rewrite · compress the rest · show what it saved</sub>
 </p>
 
 ## Why this exists
 
-rtk sits between the agent and its tools: it rewrites a command into a filtered form and condenses output before the model reads it. It ships adapters for twenty agents — DSH is not one of them — and the community plugins for DSH cover only half of either half. This plugin closes the loop: **rewrite** (delegated to rtk's rules), **compress** (rtk's own method chain, no reimplementation), **show** (savings land in the counters and are visible in the UI). Every failure path stays open: with rtk missing, slow or answering something unexpected, a tool call behaves exactly as if this plugin were not installed. It registers no new tool, replaces no shell executor and touches no model API.
+rtk (Rust Token Killer) sits between the agent and its tools: it rewrites a command into a filtered form and condenses output before the model reads it. It ships adapters for twenty agents — DSH is not one of them — and the community plugins for DSH cover only half of either half. This plugin closes the loop: **rewrite** (delegated to rtk's rules), **compress** (rtk's own method chain, no reimplementation), **show** (savings land in the counters and are visible in the UI). Every failure path stays open: with rtk missing, slow or answering something unexpected, a tool call behaves exactly as if this plugin were not installed. It registers no new tool, replaces no shell executor and touches no model API.
 
 ## What you get
 

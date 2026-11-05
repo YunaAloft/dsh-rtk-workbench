@@ -64,7 +64,7 @@ async function fetchAsset(name) {
   const target = join(CACHE, name)
   if (existsSync(target) && statSync(target).size > 0) return target
   mkdirSync(CACHE, { recursive: true })
-  const attempts = 3
+  const attempts = 5
   let lastError
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
@@ -77,8 +77,11 @@ async function fetchAsset(name) {
     } catch (error) {
       lastError = error
       if (attempt < attempts) {
-        console.log(`  retrying ${name} (${attempt}/${attempts}): ${error instanceof Error ? error.message : String(error)}`)
-        await new Promise((done) => setTimeout(done, 1000 * attempt))
+        // Same two-minute budget as the CI downloader: doubling delays capped at
+        // 8 s, so a CDN hiccup does not fail a release build.
+        const delay = Math.min(8000, 2000 * 2 ** (attempt - 1))
+        console.log(`  retrying ${name} (${attempt}/${attempts}) in ${delay} ms: ${error instanceof Error ? error.message : String(error)}`)
+        await new Promise((done) => setTimeout(done, delay))
       }
     }
   }
