@@ -21,6 +21,8 @@ The script builds a throwaway fixture repository (40 commits, a dirty worktree, 
 | Node | 24.22 |
 | Pipeline | plugin-owned (`rtk:posthook`), injected through `RTK_CONFIG_DIR` |
 
+The table was measured on `1.1.0`. `1.1.1` only fixes status-route admission and the error pill; it does not change the rewrite or compression paths measured here.
+
 ## Results
 
 | Case | Path | Before | After | Saved | Est. tokens before → after |

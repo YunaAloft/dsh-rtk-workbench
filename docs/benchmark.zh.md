@@ -21,6 +21,8 @@ node scripts/benchmark.mjs --json   # 输出原始数据
 | Node | 24.22 |
 | pipeline | 插件自管（`rtk:posthook`），经 `RTK_CONFIG_DIR` 注入 |
 
+表中数据在 `1.1.0` 上测得；`1.1.1` 只修复状态路由准入与错误药丸，不改变这里测量的改写与压缩路径。
+
 ## 结果
 
 | 用例 | 路径 | 之前 | 之后 | 降幅 | 估算 token 之前 → 之后 |

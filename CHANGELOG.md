@@ -2,7 +2,9 @@
 
 All notable changes to `dsh-rtk-workbench`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.1.1] — 2026-11-13
+
+Fixes the status-route admission race that could leave the savings pill invisible on desktop and web profiles, and keeps an unreachable route visible in the UI.
 
 ### Fixed
 

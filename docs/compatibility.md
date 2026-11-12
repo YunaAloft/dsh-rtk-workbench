@@ -6,6 +6,7 @@ What this plugin has actually been checked against, with the evidence for each r
 
 | Host (`@deepseek-ai/dsh`) | rtk | Checked on | Evidence | Notes |
 |---|---|---|---|---|
+| `0.2.2-rc.1` | `1.2.0` | 2026-11-13 | `pnpm typecheck` (host + client faces); `pnpm test` (18 files, 225 tests); `pnpm build`; `check-manifest`; `check-docs`; `verify-host`; web profile acceptance with the local 1.1.1-test.0 tarball (`web route` authenticated, 401/403, pill and session switch) | 1.1.1 |
 | `0.2.2-rc.1` | `1.2.0` | 2026-11-12 | `pnpm typecheck` (host + client faces); `pnpm test` (18 files, 220 tests); `check-manifest`; `check-docs`; `build-vendor` on the 1.2.0 release (5 platforms, checksums verified); Windows vendor binary smoke (`rtk 1.2.0 --version`); deterministic benchmark re-run (484 408 B → 40 590 B) | 1.1.0 (published 2026-11-12) |
 | `0.2.2-rc.1` | `1.1.0` | 2026-11-05 | `pnpm typecheck` (host + client faces); `pnpm test` (17 files, 200 tests); `check-manifest`; `check-docs`; `smoke-pack` on the packed tarball; maintainer desktop smoke (pill + overlay, rewrite, compression, `recall`) | 1.0.0 target |
 | `0.2.1-rc.5` | `1.1.0` | 2026-11-03 | `pnpm typecheck`; `pnpm test` (12 files, 145 tests); `check-manifest`; `check-docs`; maintainer smoke on Windows 11 (`/rtk status`, rewrite, compression, recall) | 0.2.0 target, historical |
