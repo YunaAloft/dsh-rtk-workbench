@@ -453,10 +453,25 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
       }),
       foreignTransforms: () => foreignTransforms,
       capability: () => ({ state: capability.state, detail: capability.detail }),
+      webRoute: () => ({ mounted: routeMounted, auth: routeAuth }),
     })
 
   // The web UI reads this route; a headless profile has no webserver, so the
   // service simply never appears there.
+  //
+  // Admission reuses the host's client-connection fence (Host/Origin checks +
+  // the signed browser cookie) instead of inventing a plugin token. Without
+  // that service the route is fail-closed: the payload is only meaningful to
+  // the authenticated local UI, and a missing fence is a composition problem
+  // the doctor output should surface rather than silently serve around.
+  const connectionFence = (ctx.get('connection') as { requestRejection?: unknown } | undefined)?.requestRejection
+  const routeAuth: 'authenticated' | 'fail-closed' = typeof connectionFence === 'function' ? 'authenticated' : 'fail-closed'
+  const admit =
+    typeof connectionFence === 'function'
+      ? (request: import('node:http').IncomingMessage) =>
+          (connectionFence as (req: import('node:http').IncomingMessage) => number | undefined)(request)
+      : undefined
+  let routeMounted = false
   mountStatusRoute(ctx as Context & InjectingContext, {
     sources: {
       binary: () => ({ source: resolution.source, version: capability.version }),
@@ -480,7 +495,7 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
         guards: rewrites.guardCount(),
         learned: rewrites.learnedList(),
       }),
-      session: () => stats.snapshot(stats.activeKey()),
+      session: (key?: string) => stats.snapshot(key ?? stats.activeKey()),
       lifetime: () => lifetime.snapshot(),
       patched: () => rewrites.patchedList(),
       persist: () => ({ enabled: config.statsPersist === 'aggregate' }),
@@ -488,6 +503,10 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
     doctor: async () => {
       const outcome = await commandHandler.handle({ rawInput: 'doctor', agent: undefined })
       return outcome.text ?? ''
+    },
+    ...(admit === undefined ? {} : { admit }),
+    onMounted: () => {
+      routeMounted = true
     },
     log: (message: string) => logger.info?.(`[rtk-workbench] ${message}`),
   })

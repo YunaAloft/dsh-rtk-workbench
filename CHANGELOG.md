@@ -2,6 +2,16 @@
 
 All notable changes to `dsh-rtk-workbench`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Security
+
+- `GET /api/rtk-workbench/status` and `POST /api/rtk-workbench/doctor` now sit behind the host's client-connection admission fence (Host header fence against DNS rebinding, Origin/`sec-fetch-site` same-origin checks, and the signed browser cookie): unauthenticated requests get 401, cross-site or untrusted Hosts get 403. The payload has always been counts and enums only — no command text, output or paths — but before this release any local process that could reach the webserver could read it. If the `connection` service is missing the route fails closed (401 for everything) instead of serving unauthenticated, and `/rtk doctor` reports the route's exposure in a new `web route` line.
+
+### Fixed
+
+- The savings pill follows the current session. It previously showed the most recently active session's numbers until that session ran a tool: the status route accepts `?session=<id>`, the browser half learns its session id from the session-scoped composer slot and refetches immediately on a switch, and while the returned snapshot key does not match the current session the pill and the overlay render "loading" instead of stale numbers. The overlay's health section names both keys (shortened) when they differ.
+
 ## [1.0.1] — 2026-11-06
 
 A copy fix in the web UI, plus the documentation refresh that 1.0.0's npm page could not show.

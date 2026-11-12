@@ -52,7 +52,7 @@ Then work as usual: `git status` in a large repository becomes a compact listing
 
 ## How it works
 
-Rewriting wraps `ToolDefinition.execute` (it does not re-dispatch), keeping the registry's signal fusion and accounting intact; compression runs in `tools/post-execute`, always after `await next()`, so safety plugins and the spill policy still apply. Browser side, the host half serves one read-only `GET /api/rtk-workbench/status`, and the browser half renders `saved X token · ↓N%` below the composer (in its dock row, beside the host's activity/usage pills) with a details overlay behind it.
+Rewriting wraps `ToolDefinition.execute` (it does not re-dispatch), keeping the registry's signal fusion and accounting intact; compression runs in `tools/post-execute`, always after `await next()`, so safety plugins and the spill policy still apply. Browser side, the host half serves one read-only `GET /api/rtk-workbench/status`, and the browser half renders `saved X token · ↓N%` below the composer (in its dock row, beside the host's activity/usage pills) with a details overlay behind it. The route answers counts and enums only (no command text, output or paths) behind the host's client-connection fence — Host/Origin checks plus the signed browser cookie, 401 otherwise — and a session switch makes the pill re-read and show "loading" instead of the previous session's numbers.
 
 ```mermaid
 flowchart LR

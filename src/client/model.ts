@@ -35,6 +35,8 @@ export interface EventRow {
 
 /** One session, as served by `GET /status`. */
 export interface SessionView {
+  /** Session key the host counted these numbers under. */
+  readonly key: string
   readonly compressions: number
   readonly inBytes: number
   readonly outBytes: number
@@ -134,6 +136,7 @@ function sessionOf(value: unknown): SessionView | null {
       })
     : []
   return {
+    key: str(raw.key),
     compressions: num(raw.compressions),
     inBytes: num(raw.inBytes),
     outBytes: num(raw.outBytes),
@@ -255,6 +258,23 @@ export function pillVisible(view: StatusView | undefined): boolean {
   return view !== undefined && view.switches.ui
 }
 
+/**
+ * Whether the document's session section belongs to the session the user is
+ * looking at. The host counts stats per `agent.id`; after a session switch the
+ * pill must not keep showing the previous session's numbers, so a mismatch is
+ * rendered as "loading", never as stale data. A document without a session
+ * (nothing recorded yet) and a client that does not know its session id both
+ * count as "not stale": there is no wrong number to show.
+ *
+ * @param view - last good document.
+ * @param currentSessionKey - session id from the slot's `inject`, if known.
+ */
+export function sessionMatches(view: StatusView, currentSessionKey: string | undefined): boolean {
+  if (view.session === null) return true
+  if (currentSessionKey === undefined || currentSessionKey === '') return true
+  return view.session.key === currentSessionKey
+}
+
 /** The two lines of the pill. */
 export interface PillText {
   readonly primary: string
@@ -270,10 +290,17 @@ export interface PillText {
  * @param view - last good document.
  * @param error - last fetch error, if any.
  * @param t - translator.
+ * @param currentSessionKey - session id from the slot's `inject`, if known.
  */
-export function pillText(view: StatusView | undefined, error: string | undefined, t: Translate): PillText {
+export function pillText(
+  view: StatusView | undefined,
+  error: string | undefined,
+  t: Translate,
+  currentSessionKey?: string,
+): PillText {
   if (error !== undefined) return { primary: t('pill.offline'), secondary: '' }
   if (view === undefined) return { primary: t('pill.loading'), secondary: '' }
+  if (!sessionMatches(view, currentSessionKey)) return { primary: t('pill.loading'), secondary: '' }
   if (view.probe.state === 'fail') return { primary: t('pill.unavailable'), secondary: view.probe.detail }
   if (!view.switches.compress) return { primary: t('pill.compressOff'), secondary: '' }
   if (view.pipeline.health === 'problems') {
@@ -321,15 +348,19 @@ function skips(view: SessionView): PanelRow[] {
  * @param view - last good document.
  * @param error - last fetch error, if any.
  * @param t - translator.
+ * @param currentSessionKey - session id from the slot's `inject`, if known.
  */
 export function panelSections(
   view: StatusView | undefined,
   error: string | undefined,
   t: Translate,
+  currentSessionKey?: string,
 ): PanelSection[] {
   if (view === undefined) {
     return [{ title: t('panel.loading'), rows: [] }]
   }
+  const stale = !sessionMatches(view, currentSessionKey)
+  const shorten = (key: string): string => (key.length > 12 ? `${key.slice(0, 6)}…${key.slice(-4)}` : key)
   const health: PanelRow[] = [
     { label: t('panel.binary'), value: `${view.binary.source}${view.binary.version === '' ? '' : ` · ${view.binary.version}`}` },
     {
@@ -350,7 +381,28 @@ export function panelSections(
       value: `${t('panel.rewrite')}: ${view.switches.rewrite ? t('panel.on') : t('panel.off')} · ${t('panel.compress')}: ${view.switches.compress ? t('panel.on') : t('panel.off')}`,
     },
   ]
+  if (currentSessionKey !== undefined && currentSessionKey !== '') {
+    health.push(
+      stale
+        ? {
+            label: t('panel.sessionKeys'),
+            value: t('panel.sessionMismatch', {
+              shown: shorten(view.session?.key ?? '—'),
+              current: shorten(currentSessionKey),
+            }),
+            tone: 'warn',
+          }
+        : { label: t('panel.sessionKeys'), value: t('panel.sessionMatch') },
+    )
+  }
   if (error !== undefined) health.push({ label: t('panel.error'), value: error, tone: 'warn' })
+
+  if (stale) {
+    return [
+      { title: t('panel.health'), rows: health },
+      { title: t('panel.session'), rows: [{ label: t('panel.sessionLoading'), value: '' }] },
+    ]
+  }
 
   const session = view.session
   const sessionSection: PanelSection = {

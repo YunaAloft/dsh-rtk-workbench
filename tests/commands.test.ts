@@ -168,4 +168,22 @@ describe('/rtk command handler', () => {
     const rejectedText = rejectedOutcome.kind === 'success' ? (rejectedOutcome.text ?? '') : ''
     expect(rejectedText).toContain('guard: reject — tokens-dropped')
   })
+
+  it('reports the web route exposure in doctor', async () => {
+    const authenticated = await makeHandler(baseConfig(), {
+      webRoute: () => ({ mounted: true, auth: 'authenticated' }),
+    }).handle({ rawInput: 'doctor', agent: {} })
+    const authenticatedText = authenticated.kind === 'success' ? (authenticated.text ?? '') : ''
+    expect(authenticatedText).toContain('web route  : /api/rtk-workbench (authenticated via client-connection)')
+
+    const failClosed = await makeHandler(baseConfig(), {
+      webRoute: () => ({ mounted: true, auth: 'fail-closed' }),
+    }).handle({ rawInput: 'doctor', agent: {} })
+    const failClosedText = failClosed.kind === 'success' ? (failClosed.text ?? '') : ''
+    expect(failClosedText).toContain('FAIL-CLOSED')
+
+    const headless = await makeHandler(baseConfig()).handle({ rawInput: 'doctor', agent: {} })
+    const headlessText = headless.kind === 'success' ? (headless.text ?? '') : ''
+    expect(headlessText).toContain('web route  : not mounted (headless profile)')
+  })
 })

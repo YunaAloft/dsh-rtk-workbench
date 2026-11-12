@@ -36,7 +36,10 @@ interface ReactLike {
 
 interface SlotsLike {
   inject(name: string, factory: () => () => void): void
-  register(options: Record<string, unknown>, component: (props: unknown) => unknown): () => void
+  register(
+    options: Record<string, unknown> & { inject?: (sessionId: string | undefined) => Record<string, unknown> },
+    component: (props: unknown) => unknown,
+  ): () => void
 }
 
 interface LocaleLike {
@@ -58,9 +61,19 @@ interface Snapshot {
   doctor: string | undefined
   busy: boolean
   copied: boolean
+  /** Session the pill currently renders for (from the slot's `inject`). */
+  currentSessionKey: string | undefined
 }
 
-const store: Snapshot = { view: undefined, error: undefined, open: false, doctor: undefined, busy: false, copied: false }
+const store: Snapshot = {
+  view: undefined,
+  error: undefined,
+  open: false,
+  doctor: undefined,
+  busy: false,
+  copied: false,
+  currentSessionKey: undefined,
+}
 const listeners = new Set<() => void>()
 
 function emit(): void {
@@ -101,11 +114,12 @@ function builtinTranslate(): Translate {
 let translate: Translate = builtinTranslate()
 
 /** Route prefix, resolved against the page base so a sub-path mount still works. */
-function statusUrl(): string {
+function statusUrl(sessionKey: string | undefined): string {
+  const suffix = sessionKey === undefined || sessionKey === '' ? '' : `?session=${encodeURIComponent(sessionKey)}`
   try {
-    return new URL('api/rtk-workbench/status', document.baseURI).pathname
+    return new URL('api/rtk-workbench/status', document.baseURI).pathname + suffix
   } catch {
-    return '/api/rtk-workbench/status'
+    return '/api/rtk-workbench/status' + suffix
   }
 }
 
@@ -124,7 +138,7 @@ async function refresh(): Promise<void> {
   if (inflight) return
   inflight = true
   try {
-    const response = await fetch(statusUrl(), { headers: { accept: 'application/json' }, cache: 'no-store' })
+    const response = await fetch(statusUrl(store.currentSessionKey), { headers: { accept: 'application/json' }, cache: 'no-store' })
     if (!response.ok) throw new Error(`HTTP ${String(response.status)}`)
     const view = readStatus(await response.json())
     if (view === undefined) throw new Error('unexpected status payload')
@@ -134,6 +148,17 @@ async function refresh(): Promise<void> {
   } finally {
     inflight = false
   }
+}
+
+/**
+ * Point the pill at another session. The slot machinery re-runs `inject` on a
+ * session switch; without this the module-level store would keep showing the
+ * previous session's numbers until the next poll after a tool call.
+ */
+function setCurrentSessionKey(key: string | undefined): void {
+  if (store.currentSessionKey === key) return
+  patch({ currentSessionKey: key, view: undefined })
+  void refresh()
 }
 
 /** Poll only while the page is visible. */
@@ -266,7 +291,7 @@ function createClientPlugin(require: (id: string) => unknown): {
     if (!pillVisible(snapshot.view)) return null
     const view = snapshot.view
     const tone = toneOf(view, snapshot.error)
-    const text = pillText(view, snapshot.error, t)
+    const text = pillText(view, snapshot.error, t, snapshot.currentSessionKey)
     return h(
       'button',
       {
@@ -306,7 +331,7 @@ function createClientPlugin(require: (id: string) => unknown): {
       return () => document.removeEventListener('keydown', onKey)
     }, [snapshot.open])
     if (!snapshot.open) return null
-    const sections = panelSections(snapshot.view, snapshot.error, t)
+    const sections = panelSections(snapshot.view, snapshot.error, t, snapshot.currentSessionKey)
     return h(
       'div',
       {
@@ -391,7 +416,22 @@ function createClientPlugin(require: (id: string) => unknown): {
         return startPolling()
       })
       ctx.slots.inject('conversation.composer.dock', () =>
-        ctx.slots.register({ name: 'conversation.composer.dock', id: ID, order: 2, locale: NS }, Pill),
+        ctx.slots.register(
+          {
+            name: 'conversation.composer.dock',
+            id: ID,
+            order: 2,
+            locale: NS,
+            // Session-scoped slot: the host re-runs this factory with the new
+            // sessionId on every session switch, which is the signal the pill
+            // needs to stop showing the previous session's numbers.
+            inject: (sessionId: string | undefined) => {
+              setCurrentSessionKey(sessionId)
+              return {}
+            },
+          },
+          Pill,
+        ),
       )
       ctx.slots.inject('shell.overlay', () =>
         ctx.slots.register({ name: 'shell.overlay', id: `${ID}.details`, locale: NS }, Panel),

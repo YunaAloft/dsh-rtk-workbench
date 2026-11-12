@@ -62,8 +62,12 @@ export interface StatusSources {
   readonly pipeline: () => PipelineInfo
   readonly switches: () => SwitchInfo
   readonly rewrites: () => RewriteInfo
-  /** The most recently active session, or `undefined` before any tool ran. */
-  readonly session: () => SessionSnapshot | undefined
+  /**
+   * Snapshot of one session. `key` comes from the `?session=` query; `undefined`
+   * means "the most recently active session" (legacy behaviour for callers that
+   * do not know their session id).
+   */
+  readonly session: (key?: string) => SessionSnapshot | undefined
   readonly lifetime: () => LifetimeTotals | undefined
   readonly patched: () => readonly string[]
   readonly persist: () => { readonly enabled: boolean }
@@ -89,8 +93,9 @@ export interface StatusPayload {
  *
  * @param sources - accessors for every reported fact.
  * @param now - clock override for tests.
+ * @param sessionKey - `?session=` value from the request, if any.
  */
-export function buildStatusPayload(sources: StatusSources, now: number = Date.now()): StatusPayload {
+export function buildStatusPayload(sources: StatusSources, now: number = Date.now(), sessionKey?: string): StatusPayload {
   const pipeline = sources.pipeline()
   return {
     ok: true,
@@ -104,7 +109,7 @@ export function buildStatusPayload(sources: StatusSources, now: number = Date.no
     },
     switches: sources.switches(),
     rewrites: sources.rewrites(),
-    session: sources.session() ?? null,
+    session: sources.session(sessionKey) ?? null,
     lifetime: sources.lifetime() ?? null,
     patched: [...sources.patched()],
     persist: sources.persist(),
@@ -141,6 +146,17 @@ export interface MountOptions {
   readonly sources: StatusSources
   /** Runs the same diagnostics as `/rtk doctor` on demand. */
   readonly doctor: () => Promise<string>
+  /**
+   * Admission fence applied to every request (including OPTIONS) before any
+   * route logic: return `undefined` to allow, or the HTTP status to answer.
+   * The host's `client-connection` service exposes exactly this shape as
+   * `requestRejection` (Host/Origin fence + signed browser cookie). When no
+   * `admit` is given the route is fail-closed: every request is answered 401,
+   * because the payload is only meaningful to the authenticated local UI.
+   */
+  readonly admit?: (request: IncomingMessage) => number | undefined
+  /** Called once the route is registered with a live webserver. */
+  readonly onMounted?: () => void
   readonly log?: (message: string) => void
 }
 
@@ -161,6 +177,9 @@ function send(response: ServerResponse, status: number, payload: unknown): void 
 /** Reject cross-origin and oversized doctor calls early. */
 const MAX_DOCTOR_BODY = 4 * 1024
 
+/** A session id is a lookup key, never a path: bound it before trusting it. */
+const MAX_SESSION_KEY_LENGTH = 128
+
 /**
  * Create the prefix handler.
  *
@@ -169,13 +188,24 @@ const MAX_DOCTOR_BODY = 4 * 1024
  */
 export function createStatusHandler(options: MountOptions): Handler {
   const prefix = (options.path ?? STATUS_ROUTE_PATH).replace(/\/+$/, '')
+  const admit = options.admit ?? (() => 401)
   return async (request, response) => {
+    const rejection = admit(request)
+    if (rejection !== undefined) {
+      send(response, rejection, { ok: false, error: rejection === 401 ? 'unauthorized' : 'forbidden' })
+      return
+    }
     const url = new URL(request.url ?? '/', 'http://localhost')
     const route = url.pathname.slice(prefix.length).replace(/\/+$/, '') || '/'
     const method = (request.method ?? 'GET').toUpperCase()
     try {
       if (method === 'GET' && route === '/status') {
-        send(response, 200, buildStatusPayload(options.sources))
+        const requested = url.searchParams.get('session')
+        const sessionKey =
+          requested !== null && requested.length > 0 && requested.length <= MAX_SESSION_KEY_LENGTH
+            ? requested
+            : undefined
+        send(response, 200, buildStatusPayload(options.sources, Date.now(), sessionKey))
         return
       }
       if (method === 'POST' && route === '/doctor') {
@@ -222,6 +252,7 @@ export function mountStatusRoute(ctx: InjectingContext, options: MountOptions): 
     scope.effect?.(() => () => {
       unregister()
     })
+    options.onMounted?.()
     options.log?.(`route mounted at ${options.path ?? STATUS_ROUTE_PATH}`)
   })
 }

@@ -60,6 +60,13 @@ export interface CommandContext {
   readonly foreignTransforms: () => number
   /** Last capability probe outcome. */
   readonly capability: () => { readonly state: 'unknown' | 'ok' | 'fail'; readonly detail: string }
+  /**
+   * Web status/doctor route exposure, when the host runs a web carrier:
+   * `undefined` until/unless the route is mounted (headless profiles never
+   * mount it), then whether requests pass the host's client-connection fence
+   * or are fail-closed (401) because that service was missing.
+   */
+  readonly webRoute?: () => { readonly mounted: boolean; readonly auth: 'authenticated' | 'fail-closed' }
 }
 
 export const HELP = [
@@ -257,6 +264,14 @@ export function createCommandHandler(context: CommandContext) {
     )
     const versionRun = await run(binary, ['--version'], { timeoutMs: budget, env: context.env, maxBytes: 4096 })
     lines.push(`rtk        : ${(versionRun.stdout || versionRun.stderr).trim() || describeRun(versionRun)}`)
+    const webRoute = context.webRoute?.()
+    lines.push(
+      webRoute === undefined || !webRoute.mounted
+        ? 'web route  : not mounted (headless profile)'
+        : webRoute.auth === 'authenticated'
+          ? 'web route  : /api/rtk-workbench (authenticated via client-connection)'
+          : 'web route  : /api/rtk-workbench (FAIL-CLOSED: client-connection unavailable, answering 401)',
+    )
 
     const pipelineRun = await run(binary, ['pipeline', 'show', 'rtk:posthook'], {
       timeoutMs: budget,

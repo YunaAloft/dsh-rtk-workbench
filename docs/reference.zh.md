@@ -34,7 +34,7 @@ dsh plugin --profile <profile> add dsh-rtk-workbench
 
 **界面药丸与浮层。** Web GUI 里插件在输入框下方的 composer dock 行里渲染一个药丸（与宿主的 activity/usage 同一排）——`省 12.4k token · ↓81%`——旁边是压缩与改写次数，守卫计数只在拒绝过之后出现。三种颜色：正常、警示（rtk 不可用或注入的 pipeline 回退）、灰色（压缩已关）。点开是浮层：健康、本会话、累计、按工具、跳过原因、最近三条事件、运行自检与复制诊断。药丸在拿到第一份状态之前不显示，可用 `uiPill: false` 或 `/rtk off ui` 关掉。
 
-浏览器半只读一条宿主半挂在该 profile webserver 上的路由：`GET /api/rtk-workbench/status`（只有计数与枚举，没有命令原文、输出或路径）与 `POST /api/rtk-workbench/doctor`（跑与 `/rtk doctor` 相同的自检）。headless profile 没有 webserver，这条路由自然不存在。
+浏览器半只读一条宿主半挂在该 profile webserver 上的路由：`GET /api/rtk-workbench/status`（只有计数与枚举，没有命令原文、输出或路径）与 `POST /api/rtk-workbench/doctor`（跑与 `/rtk doctor` 相同的自检）。两条端点都经过宿主 client-connection 的准入检查（Host 围栏防 DNS rebinding、Origin/`sec-fetch-site` 同源检查、签名浏览器 Cookie 认证）：未认证的请求得到 401，跨站或不可信 Host 得到 403；拿不到该服务时路由 fail-closed，一律 401。`GET /status` 接受 `?session=<id>` 返回指定会话的快照（未知 id 回 `session: null`）；浏览器半从会话作用域槽位拿到当前会话 id 传参，切换会话时立即重取，快照 key 与当前会话不一致时先显示「读取中」而不是旧会话的数字。headless profile 没有 webserver，这条路由自然不存在。`/rtk doctor` 的 `web route` 行报告当前暴露状态（已认证 / fail-closed / 未挂载）。
 
 `/rtk status` 的 `session` 行示例：
 

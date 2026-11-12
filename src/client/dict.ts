@@ -58,6 +58,10 @@ const zh = {
   'panel.copy': '复制诊断 JSON',
   'panel.copied': '已复制',
   'panel.doctorFailed': '自检失败',
+  'panel.sessionKeys': '快照会话',
+  'panel.sessionMatch': '与当前会话一致',
+  'panel.sessionMismatch': '快照 {shown} ≠ 当前 {current}，正在刷新',
+  'panel.sessionLoading': '切换会话后正在读取…',
   'panel.footnote': 'token 为估算（ASCII ÷4，汉字 ×0.6）；百分比按字节计算',
 }
 
@@ -108,6 +112,10 @@ const en: Record<keyof typeof zh, string> = {
   'panel.copy': 'Copy diagnostics JSON',
   'panel.copied': 'Copied',
   'panel.doctorFailed': 'self-check failed',
+  'panel.sessionKeys': 'snapshot session',
+  'panel.sessionMatch': 'matches the current session',
+  'panel.sessionMismatch': 'showing {shown} ≠ current {current}, refreshing',
+  'panel.sessionLoading': 'reading the new session…',
   'panel.footnote': 'tokens are estimated (ASCII / 4, CJK x 0.6); percentages use bytes',
 }
 

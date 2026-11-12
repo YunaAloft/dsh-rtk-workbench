@@ -52,7 +52,7 @@ dsh plugin --profile web add dsh-rtk-workbench
 
 ## How it works
 
-改写靠包装 `ToolDefinition.execute`（不是重派发），保留注册表的信号融合与记账；压缩在 `tools/post-execute` 里先 `await next()` 再做内容替换，因此安全插件与 spill 策略照常生效。界面侧，宿主半提供只读 `GET /api/rtk-workbench/status`，浏览器半在输入框下方（composer 的 dock 行，与宿主的 activity/usage 同一排）显示「省 X token · ↓N%」，点开是明细浮层。
+改写靠包装 `ToolDefinition.execute`（不是重派发），保留注册表的信号融合与记账；压缩在 `tools/post-execute` 里先 `await next()` 再做内容替换，因此安全插件与 spill 策略照常生效。界面侧，宿主半提供只读 `GET /api/rtk-workbench/status`，浏览器半在输入框下方（composer 的 dock 行，与宿主的 activity/usage 同一排）显示「省 X token · ↓N%」，点开是明细浮层。这条路由只回计数与枚举（没有命令原文、输出或路径），且经过宿主 client-connection 的 Host/Origin 围栏与签名 Cookie 认证，未认证一律 401；切换会话时药丸立即重取并先显示「读取中」，不渲染上一个会话的旧数字。
 
 ```mermaid
 flowchart LR

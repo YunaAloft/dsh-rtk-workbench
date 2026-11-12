@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { panelSections, pillText, pillVisible, readStatus, reduction, toneOf, type Translate } from '../src/client/model'
+import { panelSections, pillText, pillVisible, readStatus, reduction, sessionMatches, toneOf, type Translate } from '../src/client/model'
 import { dictionaries } from '../src/client/dict'
 
 /** A translator over the real dictionaries, so tests see what users read. */
@@ -72,6 +72,24 @@ describe('readStatus', () => {
     expect(view?.session).toBeNull()
     expect(view?.lifetime).toBeNull()
   })
+
+  it('keeps the session key so the client can spot a stale snapshot', () => {
+    expect(readStatus(payload())?.session?.key).toBe('s1')
+  })
+})
+
+describe('sessionMatches', () => {
+  it('flags a snapshot from another session as stale', () => {
+    const view = readStatus(payload())
+    expect(sessionMatches(view!, 's1')).toBe(true)
+    expect(sessionMatches(view!, 's2')).toBe(false)
+  })
+
+  it('treats an empty session and an unknown current key as not stale', () => {
+    expect(sessionMatches(readStatus(payload({ session: null }))!, 's2')).toBe(true)
+    expect(sessionMatches(readStatus(payload())!, undefined)).toBe(true)
+    expect(sessionMatches(readStatus(payload())!, '')).toBe(true)
+  })
 })
 
 describe('toneOf', () => {
@@ -141,6 +159,13 @@ describe('pillText', () => {
     const view = readStatus(payload({ probe: { state: 'fail', detail: 'enoent' } }))
     expect(pillText(view, undefined, translate('en')).primary).toBe('rtk unusable')
   })
+
+  it('shows loading instead of the previous session numbers after a switch', () => {
+    const view = readStatus(payload())
+    expect(pillText(view, undefined, translate('zh'), 's1').primary).toBe('省 12.4k token · ↓81%')
+    expect(pillText(view, undefined, translate('zh'), 's2').primary).toBe('rtk 读取中')
+    expect(pillText(view, undefined, translate('zh'), 's2').primary).not.toContain('12.4k')
+  })
 })
 
 describe('panelSections', () => {
@@ -172,5 +197,41 @@ describe('panelSections', () => {
   it('shows the empty state before the first compression', () => {
     const sections = panelSections(readStatus(payload({ session: null })), undefined, translate('en'))
     expect(sections[1]?.rows[0]?.label).toBe('nothing yet')
+  })
+
+  it('masks the stale session and explains the mismatch in the health rows', () => {
+    const stale = {
+      session: {
+        key: 'session-alpha-long-id',
+        compressions: 2,
+        inBytes: 1000,
+        outBytes: 200,
+        savedTokens: 300,
+        ms: 100,
+        ratio: 0.8,
+        skipped: {},
+        errors: {},
+        byTool: [],
+        recent: [],
+        updatedAt: 1_760_000_000_000,
+      },
+    }
+    const sections = panelSections(readStatus(payload(stale)), undefined, translate('zh'), 'session-beta-long-id')
+    expect(sections).toHaveLength(2)
+    expect(sections[1]?.rows[0]?.label).toBe('切换会话后正在读取…')
+    const keysRow = sections[0]?.rows.find((row) => row.label === '快照会话')
+    expect(keysRow?.tone).toBe('warn')
+    expect(keysRow?.value).toContain('≠')
+    // Long ids are shortened so the row stays readable in a bug report screenshot.
+    expect(keysRow?.value).toContain('sessio…g-id')
+    expect(keysRow?.value).not.toContain('session-alpha-long-id')
+    expect(keysRow?.value).not.toContain('session-beta-long-id')
+  })
+
+  it('confirms the snapshot belongs to the current session', () => {
+    const sections = panelSections(readStatus(payload()), undefined, translate('zh'), 's1')
+    const keysRow = sections[0]?.rows.find((row) => row.label === '快照会话')
+    expect(keysRow?.value).toBe('与当前会话一致')
+    expect(sections.map((section) => section.title)).toContain('本会话')
   })
 })
