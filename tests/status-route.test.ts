@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   buildStatusPayload,
+  createConnectionAdmission,
   createStatusHandler,
   mountStatusRoute,
   STATUS_ROUTE_PATH,
@@ -138,6 +139,32 @@ describe('admission fence', () => {
     const preflight = recorder()
     await handler({ admit: () => 401 })(request(`${STATUS_ROUTE_PATH}/status`, 'OPTIONS'), preflight.response)
     expect(preflight.state.status).toBe(401)
+  })
+})
+
+describe('createConnectionAdmission', () => {
+  it('fails closed until the connection service appears', () => {
+    let connection: { requestRejection: () => number | undefined } | undefined
+    const admit = createConnectionAdmission(() => connection)
+    expect(admit({} as never)).toBe(401)
+
+    connection = { requestRejection: () => 403 }
+    expect(admit({} as never)).toBe(403)
+  })
+
+  it('calls requestRejection on the service, so its this stays bound', () => {
+    const request = { marker: 'request' }
+    let seen: unknown
+    const connection = {
+      requestRejection(this: unknown, received: unknown): undefined {
+        expect(this).toBe(connection)
+        seen = received
+        return undefined
+      },
+    }
+    const admit = createConnectionAdmission(() => connection)
+    expect(admit(request as never)).toBeUndefined()
+    expect(seen).toBe(request)
   })
 })
 

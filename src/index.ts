@@ -13,7 +13,7 @@ import { spillOriginal } from './rtk/spill'
 import { createStats } from './stats'
 import { createLifetimeStore, defaultStatsFile } from './stats-file'
 import { commandOf, decideTool, isShellLike } from './toolmap'
-import { mountStatusRoute, type InjectingContext } from './web/status-route'
+import { createConnectionAdmission, mountStatusRoute, type ConnectionFence, type InjectingContext } from './web/status-route'
 
 export const name = 'dsh-rtk-workbench'
 
@@ -409,6 +409,16 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
     })
   }
 
+  // `client-connection` provides its service only after awaiting the browser
+  // auth store, so sampling `ctx.get` during apply can capture `undefined` and
+  // leave the status route permanently fail-closed (desktop and web profiles
+  // both hit this). Wait for the service like `commands` above; admission
+  // resolves the current value on every request.
+  let connection: ConnectionFence | undefined
+  whenService<ConnectionFence>(ctx, 'connection', (service) => {
+    connection = service
+  })
+
   // The command handler is built before the web route because `/doctor` on that
   // route reuses the same diagnostics; registering the command itself still
   // waits for the service.
@@ -453,7 +463,7 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
       }),
       foreignTransforms: () => foreignTransforms,
       capability: () => ({ state: capability.state, detail: capability.detail }),
-      webRoute: () => ({ mounted: routeMounted, auth: routeAuth }),
+      webRoute: () => ({ mounted: routeMounted, auth: connection === undefined ? 'fail-closed' : 'authenticated' }),
     })
 
   // The web UI reads this route; a headless profile has no webserver, so the
@@ -464,13 +474,7 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
   // that service the route is fail-closed: the payload is only meaningful to
   // the authenticated local UI, and a missing fence is a composition problem
   // the doctor output should surface rather than silently serve around.
-  const connectionFence = (ctx.get('connection') as { requestRejection?: unknown } | undefined)?.requestRejection
-  const routeAuth: 'authenticated' | 'fail-closed' = typeof connectionFence === 'function' ? 'authenticated' : 'fail-closed'
-  const admit =
-    typeof connectionFence === 'function'
-      ? (request: import('node:http').IncomingMessage) =>
-          (connectionFence as (req: import('node:http').IncomingMessage) => number | undefined)(request)
-      : undefined
+  const admit = createConnectionAdmission(() => connection)
   let routeMounted = false
   mountStatusRoute(ctx as Context & InjectingContext, {
     sources: {
@@ -504,7 +508,7 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
       const outcome = await commandHandler.handle({ rawInput: 'doctor', agent: undefined })
       return outcome.text ?? ''
     },
-    ...(admit === undefined ? {} : { admit }),
+    admit,
     onMounted: () => {
       routeMounted = true
     },

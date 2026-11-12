@@ -180,6 +180,31 @@ const MAX_DOCTOR_BODY = 4 * 1024
 /** A session id is a lookup key, never a path: bound it before trusting it. */
 const MAX_SESSION_KEY_LENGTH = 128
 
+/** The slice of the host's `client-connection` service used for admission. */
+export interface ConnectionFence {
+  requestRejection(request: IncomingMessage): number | undefined
+}
+
+/**
+ * Build an admission fence that resolves the connection service per request.
+ *
+ * `client-connection` provides its service only after its asynchronous browser
+ * auth store is ready. Reading the service once during `apply` can therefore
+ * capture `undefined` and leave the route permanently fail-closed. Resolving it
+ * at request time also keeps `requestRejection`'s `this` bound to the service;
+ * extracting the method first makes it throw once the service does appear.
+ *
+ * @param getConnection - the current connection service, if the host has one.
+ */
+export function createConnectionAdmission(
+  getConnection: () => ConnectionFence | undefined,
+): (request: IncomingMessage) => number | undefined {
+  return (request) => {
+    const connection = getConnection()
+    return connection === undefined ? 401 : connection.requestRejection(request)
+  }
+}
+
 /**
  * Create the prefix handler.
  *

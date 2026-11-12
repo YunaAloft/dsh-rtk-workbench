@@ -14,6 +14,7 @@ export const NS = 'rtk-workbench'
 const zh = {
   'pill.loading': 'rtk 读取中',
   'pill.offline': 'rtk 不可用',
+  'pill.offlineDetail': '状态接口 {error}',
   'pill.unavailable': 'rtk 不可用',
   'pill.compressOff': 'rtk 压缩已关',
   'pill.degraded': 'rtk 降级',
@@ -68,6 +69,7 @@ const zh = {
 const en: Record<keyof typeof zh, string> = {
   'pill.loading': 'rtk loading',
   'pill.offline': 'rtk unreachable',
+  'pill.offlineDetail': 'status route {error}',
   'pill.unavailable': 'rtk unusable',
   'pill.compressOff': 'rtk compression off',
   'pill.degraded': 'rtk degraded',

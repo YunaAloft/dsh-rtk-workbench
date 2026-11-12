@@ -101,6 +101,10 @@ describe('toneOf', () => {
     expect(toneOf(readStatus(payload()), 'HTTP 500')).toBe('warn')
   })
 
+  it('is gray when the first fetch fails before any document arrived', () => {
+    expect(toneOf(undefined, 'HTTP 401')).toBe('off')
+  })
+
   it('warns on a failed probe and on a fallback pipeline', () => {
     expect(toneOf(readStatus(payload({ probe: { state: 'fail', detail: 'enoent' } })), undefined)).toBe('warn')
     expect(toneOf(readStatus(payload({ pipeline: { mode: 'plugin-owned', health: 'problems' } })), undefined)).toBe('warn')
@@ -116,13 +120,15 @@ describe('toneOf', () => {
 })
 
 describe('pillVisible', () => {
-  it('stays hidden until a document arrives, and when the UI switch is off', () => {
+  it('stays hidden until a document arrives, except for a fetch error', () => {
     expect(pillVisible(undefined)).toBe(false)
+    expect(pillVisible(undefined, 'HTTP 401')).toBe(true)
     expect(pillVisible(readStatus(payload()))).toBe(true)
     const hidden = readStatus(
       payload({ switches: { rewrite: true, compress: true, awareness: true, guard: 'enforce', deny: false, ui: false } }),
     )
     expect(pillVisible(hidden)).toBe(false)
+    expect(pillVisible(hidden, 'HTTP 401')).toBe(false)
   })
 })
 
@@ -166,6 +172,12 @@ describe('pillText', () => {
     expect(pillText(view, undefined, translate('zh'), 's2').primary).toBe('rtk 读取中')
     expect(pillText(view, undefined, translate('zh'), 's2').primary).not.toContain('12.4k')
   })
+
+  it('names the failed status route before the first document', () => {
+    const text = pillText(undefined, 'HTTP 401', translate('zh'))
+    expect(text.primary).toBe('rtk 不可用')
+    expect(text.secondary).toBe('状态接口 HTTP 401')
+  })
 })
 
 describe('panelSections', () => {
@@ -180,6 +192,12 @@ describe('panelSections', () => {
     expect(session?.note).toContain('size 9')
     expect(sections[3]?.rows[0]?.label).toBe('bash')
     expect(sections[4]?.rows[0]?.value).toContain('↓90%')
+  })
+
+  it('shows the fetch error before the first document', () => {
+    const sections = panelSections(undefined, 'HTTP 401', translate('zh'))
+    expect(sections[0]?.title).toBe('健康')
+    expect(sections[0]?.rows[0]).toMatchObject({ label: '错误', value: 'HTTP 401', tone: 'warn' })
   })
 
   it('keeps the last good numbers visible when a poll fails', () => {

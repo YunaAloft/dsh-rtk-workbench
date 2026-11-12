@@ -2,6 +2,13 @@
 
 All notable changes to `dsh-rtk-workbench`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- The status route now waits for the host's `client-connection` service instead of capturing it during `apply`. `client-connection` provides the service after its asynchronous browser auth store is ready, so the previous eager read could leave the route permanently fail-closed: `/api/rtk-workbench/status` answered 401 for every request, the savings pill never received its first document, and both desktop and web profiles showed no pill. Admission now resolves the service per request, keeps `requestRejection`'s `this` bound, and `/rtk doctor` reports `authenticated` once the service is available.
+- When the first status fetch fails, the client now renders a grey `rtk unavailable` pill with the error in its overlay instead of disappearing. A fail-closed or unreachable route is visible instead of looking like the plugin never loaded.
+
 ## [1.1.0] — 2026-11-12
 
 Bundles rtk 1.2.0 and hardens the rewrite pre-filter.

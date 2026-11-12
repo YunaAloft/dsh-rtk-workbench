@@ -218,8 +218,11 @@ export function readStatus(input: unknown): StatusView | undefined {
  * @param error - last fetch error, if the most recent attempt failed.
  */
 export function toneOf(view: StatusView | undefined, error: string | undefined): Tone {
-  if (error !== undefined) return 'warn'
+  // With no document at all there are no numbers to warn about: a failed first
+  // fetch is an unavailable gray pill, not a stale-data warning. Once a
+  // document exists, a failed refresh warns that the visible numbers are stale.
   if (view === undefined) return 'off'
+  if (error !== undefined) return 'warn'
   if (view.probe.state === 'fail') return 'warn'
   // Compression is where the savings come from; with it off the pill must not
   // keep showing a healthy green dot over a frozen number.
@@ -249,13 +252,17 @@ export function reduction(ratio: number): string {
 /**
  * Whether the pill should be on screen at all.
  *
- * Hidden until the first document arrives (no flicker of a fake "ready"), and
- * hidden when `/rtk off ui` or `uiPill: false` asked for it.
+ * Hidden until the first document arrives (no flicker of a fake "ready"),
+ * except when the first fetch failed: then a gray unavailable pill is the only
+ * signal that the plugin is present but its status route is unreachable.
+ * Hidden when `/rtk off ui` or `uiPill: false` asked for it.
  *
  * @param view - last good document.
+ * @param error - last fetch error, if any.
  */
-export function pillVisible(view: StatusView | undefined): boolean {
-  return view !== undefined && view.switches.ui
+export function pillVisible(view: StatusView | undefined, error?: string): boolean {
+  if (view === undefined) return error !== undefined
+  return view.switches.ui
 }
 
 /**
@@ -298,7 +305,9 @@ export function pillText(
   t: Translate,
   currentSessionKey?: string,
 ): PillText {
-  if (error !== undefined) return { primary: t('pill.offline'), secondary: '' }
+  if (error !== undefined) {
+    return { primary: t('pill.offline'), secondary: t('pill.offlineDetail', { error }) }
+  }
   if (view === undefined) return { primary: t('pill.loading'), secondary: '' }
   if (!sessionMatches(view, currentSessionKey)) return { primary: t('pill.loading'), secondary: '' }
   if (view.probe.state === 'fail') return { primary: t('pill.unavailable'), secondary: view.probe.detail }
@@ -357,7 +366,12 @@ export function panelSections(
   currentSessionKey?: string,
 ): PanelSection[] {
   if (view === undefined) {
-    return [{ title: t('panel.loading'), rows: [] }]
+    // Without a document the overlay has no health/session data; surfacing the
+    // fetch error is the difference between "plugin broken" and "plugin not
+    // installed" for someone who only sees the composer dock.
+    return error === undefined
+      ? [{ title: t('panel.loading'), rows: [] }]
+      : [{ title: t('panel.health'), rows: [{ label: t('panel.error'), value: error, tone: 'warn' }] }]
   }
   const stale = !sessionMatches(view, currentSessionKey)
   const shorten = (key: string): string => (key.length > 12 ? `${key.slice(0, 6)}…${key.slice(-4)}` : key)

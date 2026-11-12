@@ -288,8 +288,8 @@ function createClientPlugin(require: (id: string) => unknown): {
   function Pill(props: unknown): unknown {
     const snapshot = useSnapshot()
     const t = pickTranslate(props)
-    if (!pillVisible(snapshot.view)) return null
     const view = snapshot.view
+    if (!pillVisible(view, snapshot.error)) return null
     const tone = toneOf(view, snapshot.error)
     const text = pillText(view, snapshot.error, t, snapshot.currentSessionKey)
     return h(
