@@ -2,7 +2,9 @@
 
 All notable changes to `dsh-rtk-workbench`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.2] — 2026-11-12
+
+The status surface closes two data-plane gaps reported after 1.0.1: the read-only route had no host authentication, and the pill kept the previous session's numbers until that session ran a tool.
 
 ### Security
 
