@@ -17,7 +17,7 @@ node scripts/benchmark.mjs --json   # 输出原始数据
 |---|---|
 | 系统 | Windows 11 |
 | rtk | `1.2.0` |
-| 插件 | `1.0.2（1.1.0 开发分支）` |
+| 插件 | `1.1.0` |
 | Node | 24.22 |
 | pipeline | 插件自管（`rtk:posthook`），经 `RTK_CONFIG_DIR` 注入 |
 

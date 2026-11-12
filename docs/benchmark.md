@@ -17,7 +17,7 @@ The script builds a throwaway fixture repository (40 commits, a dirty worktree, 
 |---|---|
 | OS | Windows 11 |
 | rtk | `1.2.0` |
-| Plugin | `1.0.2 (1.1.0 dev branch)` |
+| Plugin | `1.1.0` |
 | Node | 24.22 |
 | Pipeline | plugin-owned (`rtk:posthook`), injected through `RTK_CONFIG_DIR` |
 

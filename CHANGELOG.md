@@ -2,7 +2,9 @@
 
 All notable changes to `dsh-rtk-workbench`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.1.0] — 2026-11-12
+
+Bundles rtk 1.2.0 and hardens the rewrite pre-filter. GitHub release only: npm still serves 1.0.2, so install this version from the release tarballs.
 
 ### Changed
 
