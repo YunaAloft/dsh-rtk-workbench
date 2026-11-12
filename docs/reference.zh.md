@@ -1,6 +1,6 @@
 # dsh-rtk-workbench 参考手册（1.0.1）
 
-适用：DSH `0.2.2-rc.1`、rtk `1.1.0`、Node `^22.19.0 || >=24`。安装后需要重启 `dsh web`（bundle 变更不是刷新页面）。
+适用：DSH `0.2.2-rc.1`、rtk `1.2.0`、Node `^22.19.0 || >=24`。安装后需要重启 `dsh web`（bundle 变更不是刷新页面）。
 
 ## 1. 安装与验证
 
@@ -106,7 +106,7 @@ lifetime   : 2 831 compressions, ~1.2M tok saved since 2026-11-05
 | 组件 | 版本 |
 |---|---|
 | DeepSeek Harness | `0.2.2-rc.1`（目标；`package.json` 的 `dshTarget`） |
-| rtk | `1.1.0`（内置；`dshRtkVersion`） |
+| rtk | `1.2.0`（内置；`dshRtkVersion`） |
 | Node | `^22.19.0 || >=24` |
 | 插件 | `1.0.1` |
 
@@ -136,11 +136,11 @@ lifetime   : 2 831 compressions, ~1.2M tok saved since 2026-11-05
 | `dsh-token-saver`（在 `tools/post-execute` 裁剪） | 安全：它的裁剪标记会被识别，本层不再动那段文本 | 不会二次裁剪 |
 | `billion-context`（折叠旧对话、ACP 标记） | 安全：带 ACP 标记的内容直接跳过 | 无需处理 |
 
-**语义守卫。** 执行改写结果前，插件逐段确认它仍在执行原命令：普通前缀（`git status` → `rtk git status`）、`gradle` → `gradlew` 映射、`next build [args]` → `rtk next [args]` 映射（rtk 的 `next` 固定注入 `build` 子命令，所以没有丢参数），或路径与行数都保留的 `read` 映射。任何丢了参数的提案——rtk 1.1.0 会把 `python -m pytest` 变成 `rtk pytest`——会被拒绝，原命令照跑，并在 `/rtk stats` 的 `guard` 计数里体现。`/rtk explain <命令>` 给出判定并说明是哪种映射证明的等价。被拒的改写仍会照常走 post-execute 压缩。
+**语义守卫。** 执行改写结果前，插件逐段确认它仍在执行原命令：普通前缀（`git status` → `rtk git status`）、`gradle` → `gradlew` 映射、`next build [args]` → `rtk next [args]` 映射（rtk 的 `next` 固定注入 `build` 子命令，所以没有丢参数），或路径与行数都保留的 `read` 映射。任何丢了参数的提案——rtk 1.2.0 会把 `python -m pytest` 变成 `rtk pytest`——会被拒绝，原命令照跑，并在 `/rtk stats` 的 `guard` 计数里体现。`/rtk explain <命令>` 给出判定并说明是哪种映射证明的等价。被拒的改写仍会照常走 post-execute 压缩。
 
 **token 口径。** 节省量由压缩发生时的前后文本各自估算：ASCII 稠密字符按每字符 0.25 token，汉字与全角形式按每字符 0.6 token。绝不用字节差反推，因为中英混排没有统一的字节/token 比。所有界面——`/rtk stats`、`--json`、药丸、浮层、基准与 README——读同一个函数；`tests/tokens.test.ts` 钉住公式，`tests/benchmark-tokens.test.ts` 保证基准脚本里的副本同步。它是估算，不是服务商计费口径。
 
-**版本策略。** 平台子包与主包同版本并记录内置 rtk 版本；DSH 升级后按新 tag 重跑兼容检查再发版。rtk 的参考源码用与内置二进制一致的发布 tag（`release-v1.1.0`），不用 `develop`。
+**版本策略。** 平台子包与主包同版本并记录内置 rtk 版本；DSH 升级后按新 tag 重跑兼容检查再发版。rtk 的参考源码用与内置二进制一致的发布 tag（`v1.2.0`），不用 `develop`。
 
 ## 7. 故障排查
 

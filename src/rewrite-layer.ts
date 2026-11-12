@@ -7,6 +7,7 @@ import {
   isWorthRewriting,
   looksLikeRtkFailure,
   resultText,
+  rewriteInvocation,
   verbOf,
   type RewriteOutcome,
 } from './rtk/rewrite'
@@ -228,7 +229,7 @@ export function createRewriteLayer(options: RewriteLayerOptions) {
       const cached = readCache(cacheKey)
       let outcome: RewriteOutcome | undefined = cached
       if (outcome === undefined) {
-        const run = await runner(binary, ['rewrite', command], {
+        const run = await runner(binary, rewriteInvocation(command), {
           timeoutMs: options.timeoutOf?.() ?? timeoutMs,
           signal: exec.signal,
           env,

@@ -28,7 +28,11 @@ const RTK_VERSION = PLUGIN_MANIFEST.dshRtkVersion ?? '1.1.0'
 // version to reason about, and a packaging fix can always be republished.
 const PLUGIN_VERSION = PLUGIN_MANIFEST.version
 const RELEASE = `https://github.com/rtk-ai/rtk/releases/download/v${RTK_VERSION}`
-const CACHE = join(ROOT, 'cache')
+// Cache per rtk version: release asset names carry no version, so a single flat
+// cache would silently reuse the previous version's archive after a
+// `dshRtkVersion` bump (the checksums file is cached the same way and would
+// verify the stale archive against itself).
+const CACHE = join(ROOT, 'cache', `rtk-${RTK_VERSION}`)
 const VENDOR = join(ROOT, 'vendor')
 const PACKAGES = join(ROOT, 'packages')
 const DIST_NPM = join(ROOT, 'dist', 'npm')

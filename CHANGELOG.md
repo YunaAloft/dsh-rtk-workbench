@@ -2,6 +2,17 @@
 
 All notable changes to `dsh-rtk-workbench`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Bundled rtk upgraded from 1.1.0 to 1.2.0. The upstream release fixes segment rewriting (#4132), routes commands without a filter through `swap` (#4685), corrects `gain` timing accounting (#4677, #3943) and folds `git ls-tree` by directory (#1816). The semantic-guard corpus was re-checked against the 1.2.0 source: `next build [args]` → `rtk next [args]` and the argument-dropping `python -m pytest` → `rtk pytest` mapping are unchanged, so both the accepted and refused cases still hold.
+
+### Fixed
+
+- `rtk rewrite` is now called with `--` when the command starts with a dash. Without it, `rtk rewrite -h` is parsed by rtk's own clap layer, prints help and exits 0 — and the help text then looks like an allowed rewrite. `--` ends option parsing so the command is always data.
+- The recursion pre-filter now recognises an already-rewritten command through the shapes shells actually produce: environment prefixes (`FOO=1 rtk …`), quoted command words (`"rtk" …`), absolute/Windows paths, `.exe` suffixes and different case. Previously each of those paid an unnecessary `rtk rewrite` spawn before returning the command unchanged.
+
 ## [1.0.2] — 2026-11-12
 
 The status surface closes two data-plane gaps reported after 1.0.1: the read-only route had no host authentication, and the pill kept the previous session's numbers until that session ran a tool.

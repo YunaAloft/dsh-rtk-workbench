@@ -28,5 +28,5 @@ adds no restriction of its own on top of them.
 ## Upstream
 
 - Source: <https://github.com/rtk-ai/rtk>
-- Which version is bundled: `dshRtkVersion` in `package.json` (currently `1.1.0`), also printed by
+- Which version is bundled: `dshRtkVersion` in `package.json` (currently `1.2.0`), also printed by
   `/rtk status` and recorded in `dist/github/manifest.json` of each release.

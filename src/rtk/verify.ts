@@ -4,7 +4,7 @@
  * The cheap checks in {@link decideRewrite} prove that a proposal *looks* like
  * an rtk invocation (it carries an `rtk` segment, adds no control operator and
  * stays a sane length). None of them proves the proposal still runs the command
- * the caller asked for: rtk 1.1.0 drops arguments in a few mappings —
+ * the caller asked for: rtk 1.2.0 drops arguments in a few mappings —
  * `next build` becomes `rtk next`, `python -m pytest` becomes `rtk pytest` — and
  * a dropped argument silently executes a different command.
  *
@@ -87,7 +87,7 @@ function isGradleMapping(original: string, rewritten: string): boolean {
  * `rtk next` is not a bare passthrough: its implementation always appends the
  * `build` subcommand before the caller's arguments (falling back to
  * `npx next build` when `next` is not on PATH), so the dropped word is not a
- * dropped argument. rtk 1.1.0 rewrites `next build` and nothing else, which is
+ * dropped argument. rtk 1.2.0 rewrites `next build` and nothing else, which is
  * why `next dev` never reaches this check.
  *
  * @param original - one normalized segment of the caller's command.

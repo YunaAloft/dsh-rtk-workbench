@@ -44,7 +44,65 @@ export function introducesNewOperators(original: string, rewritten: string): boo
  * all and there is no reason to execute it over the original.
  */
 export function hasRtkSegment(command: string): boolean {
-  return /(?:^|&&|\|\||[;|\n])\s*rtk(?:\s|$)/.test(command)
+  return splitSegments(command).some((segment) => isRtkInvocation(segment))
+}
+
+/** Leading `NAME=value` assignments, quoted or bare, before the command word. */
+const ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S*)\s+/
+
+/** Remove any leading environment assignments from one segment. */
+function stripEnvAssignments(segment: string): string {
+  let rest = segment.trimStart()
+  for (;;) {
+    const match = ENV_ASSIGNMENT.exec(rest)
+    if (match === null) return rest
+    rest = rest.slice(match[0].length)
+  }
+}
+
+/** First word of a segment, with one layer of matching quotes removed. */
+function firstWord(segment: string): string {
+  const match = /^(?:"([^"]*)"|'([^']*)'|(\S+))/.exec(segment.trimStart())
+  if (match === null) return ''
+  return match[1] ?? match[2] ?? match[3] ?? ''
+}
+
+/** Basename without a `.exe` suffix, for comparing one command word. */
+function commandBase(word: string): string {
+  const base = word.split(/[\\/]/).pop() ?? word
+  return base.replace(/\.exe$/i, '')
+}
+
+/**
+ * Whether one shell segment already invokes rtk.
+ *
+ * The check has to survive what shells and users actually write around a
+ * command: environment prefixes (`FOO=1 rtk …`), quoted command words
+ * (`"rtk" …`), absolute or Windows paths, an `.exe` suffix and a different case
+ * on Windows. Missing one of those only costs an unnecessary `rtk rewrite`
+ * spawn (~206 ms) and returns the command unchanged, but the pre-filter exists
+ * precisely to avoid paying that.
+ *
+ * @param segment - one operator-delimited segment of a shell command.
+ */
+export function isRtkInvocation(segment: string): boolean {
+  const word = firstWord(stripEnvAssignments(segment))
+  if (word === '') return false
+  return commandBase(word).toLowerCase() === 'rtk'
+}
+
+/**
+ * Arguments for the `rtk rewrite` call.
+ *
+ * A command whose first character is `-` (`-h`, `--help`) would otherwise be
+ * read by rtk's own clap parser as a flag: it prints help and exits 0, and the
+ * help text then looks like an allowed rewrite. `--` ends option parsing so the
+ * command is always treated as data.
+ *
+ * @param command - the command the model asked for.
+ */
+export function rewriteInvocation(command: string): string[] {
+  return command.trimStart().startsWith('-') ? ['rewrite', '--', command] : ['rewrite', command]
 }
 
 /**
@@ -98,7 +156,7 @@ export function absolutizeRtk(command: string, binary: string, dialect: Dialect 
  * The cheap guards exist because the proposed command is data produced by an
  * external binary: executing it unchecked would outsource "what runs" to that
  * binary. The semantic guard goes one step further and checks that the proposal
- * still runs the *same* command — rtk 1.1.0 drops arguments in some mappings
+ * still runs the *same* command — rtk 1.2.0 drops arguments in some mappings
  * (`next build` → `rtk next`), which the shape checks cannot see.
  *
  * @param original - command the model asked for.
@@ -192,9 +250,10 @@ export function isWorthRewriting(
   const segments = splitSegments(command)
   if (segments.length === 0) return false
   return segments.some((segment) => {
-    const first = segment.split(/\s+/)[0] ?? ''
+    if (isRtkInvocation(segment)) return false
+    const stripped = stripEnvAssignments(segment)
+    const first = firstWord(stripped)
     if (first === '') return false
-    if (first === 'rtk' || first.endsWith('/rtk') || first.endsWith('\\rtk.exe')) return false
     if (BUILTIN_ONLY.has(first)) return false
     // `rtk rewrite "cat big.log"` yields `rtk read big.log`, which filters nothing
     // for a log *and* makes rtk skip its own posthook for that call — so the one
@@ -216,11 +275,11 @@ export function isWorthRewriting(
  * @returns the verb, or `undefined` for an empty command.
  */
 export function verbOf(command: string): string | undefined {
-  const first = splitSegments(command)[0]?.split(/\s+/)[0]
-  if (first === undefined || first === '') return undefined
-  const unquoted = first.replace(/^["']|["']$/g, '')
-  const base = unquoted.split(/[\\/]/).pop() ?? unquoted
-  return base.replace(/\.exe$/i, '') || undefined
+  const segment = splitSegments(command)[0]
+  if (segment === undefined) return undefined
+  const word = firstWord(stripEnvAssignments(segment))
+  if (word === '') return undefined
+  return commandBase(word).toLowerCase() || undefined
 }
 
 /**

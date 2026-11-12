@@ -1,6 +1,6 @@
 # dsh-rtk-workbench reference (1.0.1)
 
-Applies to DSH `0.2.2-rc.1`, rtk `1.1.0`, Node `^22.19.0 || >=24`. Restart `dsh web` after installing — a bundle change is not a page refresh.
+Applies to DSH `0.2.2-rc.1`, rtk `1.2.0`, Node `^22.19.0 || >=24`. Restart `dsh web` after installing — a bundle change is not a page refresh.
 
 ## 1. Install and verify
 
@@ -106,7 +106,7 @@ Every key can be overridden from `cordis.patch.yml`; values are validated at loa
 | Component | Version |
 |---|---|
 | DeepSeek Harness | `0.2.2-rc.1` (target; `dshTarget` in `package.json`) |
-| rtk | `1.1.0` (bundled; `dshRtkVersion`) |
+| rtk | `1.2.0` (bundled; `dshRtkVersion`) |
 | Node | `^22.19.0 || >=24` |
 | Plugin | `1.0.1` |
 
@@ -137,11 +137,11 @@ The matrix describes the plugin's *observable* behaviour. "skipped" always means
 | `dsh-token-saver` (trims in `tools/post-execute`) | Safe: its trimming markers are recognised and this layer leaves the text alone | No double trimming |
 | `billion-context` (folds old dialogue, ACP markers) | Safe: ACP-marked content is skipped | None |
 
-**Semantic guard.** Before executing a proposal, the plugin checks that every rewritten segment still carries the original command: a plain prefix (`git status` → `rtk git status`), a `gradle` → `gradlew` mapping, a `next build [args]` → `rtk next [args]` mapping (rtk's `next` always injects the `build` subcommand, so no argument is lost), or a `read` mapping whose path and line window survive. A proposal that dropped a token — rtk 1.1.0 turns `python -m pytest` into `rtk pytest` — is refused, the original command runs, and the call is counted under `guard` in `/rtk stats`. `/rtk explain <command>` shows the verdict and names the mapping that proved equivalence. Rejected rewrites still get post-execute compression on their output.
+**Semantic guard.** Before executing a proposal, the plugin checks that every rewritten segment still carries the original command: a plain prefix (`git status` → `rtk git status`), a `gradle` → `gradlew` mapping, a `next build [args]` → `rtk next [args]` mapping (rtk's `next` always injects the `build` subcommand, so no argument is lost), or a `read` mapping whose path and line window survive. A proposal that dropped a token — rtk 1.2.0 turns `python -m pytest` into `rtk pytest` — is refused, the original command runs, and the call is counted under `guard` in `/rtk stats`. `/rtk explain <command>` shows the verdict and names the mapping that proved equivalence. Rejected rewrites still get post-execute compression on their output.
 
 **Token figures.** Savings are estimated from both texts at compression time: ASCII-dense characters price at 0.25 tokens each, CJK characters and full-width forms at 0.6. The byte delta is never used as a proxy, because mixed Chinese and English output has no single bytes-per-token ratio. Every surface — `/rtk stats`, `--json`, the pill, the overlay, the benchmark and the README — reads the same function; `tests/tokens.test.ts` pins it and `tests/benchmark-tokens.test.ts` keeps the benchmark script's copy in sync. It is an estimate, not provider billing.
 
-**Version policy.** Platform subpackages share the main package's version and record the bundled rtk version; a DSH upgrade re-runs the compatibility check against the new tag before release. The reference rtk source is the release tag matching the bundled binary (`release-v1.1.0`), never `develop`.
+**Version policy.** Platform subpackages share the main package's version and record the bundled rtk version; a DSH upgrade re-runs the compatibility check against the new tag before release. The reference rtk source is the release tag matching the bundled binary (`v1.2.0`), never `develop`.
 
 ## 7. Troubleshooting
 

@@ -68,7 +68,7 @@ flowchart LR
 
 ## Measured effect
 
-Deterministic benchmark total: **463 507 B → 38 264 B (−91.7 %)**, about 115.9k → 9.6k estimated tokens. The full table, how to reproduce it and what those numbers do **not** prove are in [the benchmark](./docs/benchmark.md); tokens are estimates, not provider billing.
+Deterministic benchmark total: **484 408 B → 40 590 B (−91.6 %)**, about 121.1k → 10.2k estimated tokens. The full table, how to reproduce it and what those numbers do **not** prove are in [the benchmark](./docs/benchmark.md); tokens are estimates, not provider billing.
 
 ## Documentation
 

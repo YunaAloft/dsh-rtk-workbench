@@ -40,7 +40,7 @@ export interface Config {
   rewriteSandboxGuard: 'auto' | 'off'
   /**
    * Verify that rtk's proposal still runs the original command before executing
-   * it. `enforce` rejects proposals that dropped tokens (rtk 1.1.0 maps
+   * it. `enforce` rejects proposals that dropped tokens (rtk 1.2.0 maps
    * `next build` to `rtk next`); `off` trusts rtk's stdout as-is.
    */
   rewriteSemanticGuard: 'enforce' | 'off'
@@ -150,7 +150,7 @@ export const Config: Schema<Config> = Schema.object({
   rewriteSemanticGuard: Schema.union(['enforce', 'off'])
     .default('enforce')
     .description(
-      'Verify that rtk’s proposal still runs the original command; rejects argument-dropping rewrites (rtk 1.1.0 turns `next build` into `rtk next`).',
+      'Verify that rtk’s proposal still runs the original command; rejects argument-dropping rewrites (rtk 1.2.0 turns `next build` into `rtk next`).',
     ),
   shellTools: Schema.array(Schema.string())
     .default(['bash', 'pwsh'])

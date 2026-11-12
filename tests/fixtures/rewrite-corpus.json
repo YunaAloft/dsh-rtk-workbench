@@ -1,5 +1,5 @@
 {
-  "note": "Real `rtk rewrite` output captured on Windows with rtk 1.1.0 (2026-11-03). Each case is [command, rtk proposal, expected verdict]. Prefix rewrites, known mappings and untouched segments must be accepted; any proposal that drops a token or changes an environment assignment must be rejected.",
+  "note": "Real `rtk rewrite` output captured on Windows with rtk 1.1.0 (2026-11-03), re-verified against rtk 1.2.0 source (2026-11-12). Each case is [command, rtk proposal, expected verdict]. Prefix rewrites, known mappings and untouched segments must be accepted; any proposal that drops a token or changes an environment assignment must be rejected.",
   "cases": [
     ["git status", "rtk git status", "accept"],
     ["git log --oneline -5", "rtk git log --oneline -5", "accept"],

@@ -260,7 +260,7 @@ export function createCommandHandler(context: CommandContext) {
     lines.push(
       platform.supported
         ? `platform pkg: dsh-rtk-workbench-${platform.id}  (bundled binary expected)`
-        : `platform pkg: none for ${platform.id} — rtk 1.1.0 publishes no build for it; set rtkPath to an rtk on PATH (or inside WSL) or use a different plugin`,
+        : `platform pkg: none for ${platform.id} — this rtk release publishes no build for it; set rtkPath to an rtk on PATH (or inside WSL) or use a different plugin`,
     )
     const versionRun = await run(binary, ['--version'], { timeoutMs: budget, env: context.env, maxBytes: 4096 })
     lines.push(`rtk        : ${(versionRun.stdout || versionRun.stderr).trim() || describeRun(versionRun)}`)

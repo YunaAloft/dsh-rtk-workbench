@@ -75,7 +75,7 @@
     "compression"
   ],
   "dshTarget": "0.2.2-rc.1",
-  "dshRtkVersion": "1.1.0",
+  "dshRtkVersion": "1.2.0",
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis": {
       "optional": true
