@@ -1,0 +1,90 @@
+name: Bug report
+description: The plugin misbehaves — pill, panel, compression or rewriting.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先**完全退出并重新打开 DSH**（不是最小化）再试一次：更新插件后旧样式可能仍留在页面里。
+        贴内容前请确认不含命令原文、工具输出或密钥。
+
+  - type: input
+    id: dsh-version
+    attributes:
+      label: DSH version
+      description: "`dsh --version` 的输出"
+      placeholder: "0.2.2-rc.3"
+    validations:
+      required: true
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      description: 插件管理器里显示的版本，或 `npm ls dsh-rtk-workbench` 的结果
+      placeholder: "1.1.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install method
+      options:
+        - npm
+        - GitHub Release tarball
+        - local build / tarball
+        - not sure
+    validations:
+      required: false
+
+  - type: input
+    id: platform
+    attributes:
+      label: OS and architecture
+      placeholder: "macOS 14 arm64 / Windows 11 x64 / Ubuntu 24.04 arm64"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: restart
+    attributes:
+      label: Did a full restart change anything?
+      options:
+        - Still reproduces after a full restart
+        - Gone after a full restart
+        - Have not tried yet
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what did you expect?
+      placeholder: "药丸显示成了巨大的黑色图标，但功能本身正常……"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce (optional)
+    validations:
+      required: false
+
+  - type: input
+    id: screenshot
+    attributes:
+      label: Screenshot or recording URL (optional)
+      placeholder: "https://github.com/user-attachments/assets/…"
+    validations:
+      required: false
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: /rtk doctor output (optional, strongly recommended)
+      description: 不含命令原文与工具输出，可以放心贴
+      render: text
+    validations:
+      required: false

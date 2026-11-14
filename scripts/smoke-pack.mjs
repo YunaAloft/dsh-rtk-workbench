@@ -62,11 +62,7 @@ try {
   // and a release asset that quietly drops them ships dead links.
   for (const relative of [
     'docs/reference.md',
-    'docs/reference.zh.md',
-    'docs/benchmark.md',
-    'docs/benchmark.zh.md',
-    'docs/compatibility.md',
-    'docs/compatibility.zh.md',
+    'docs/reference.en.md',
     'CHANGELOG.md',
     'README.en.md',
   ]) {

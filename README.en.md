@@ -9,6 +9,9 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/dsh-rtk-workbench"><img alt="npm" src="https://img.shields.io/npm/v/dsh-rtk-workbench?style=flat-square&color=6c5ce7"></a>
   <a href="https://www.npmjs.com/package/dsh-rtk-workbench"><img alt="downloads" src="https://img.shields.io/npm/dm/dsh-rtk-workbench?style=flat-square&color=4b6fff"></a>
+  <a href="https://github.com/YunaAloft/dsh-rtk-workbench/actions/workflows/ci.yml"><img alt="ci" src="https://github.com/YunaAloft/dsh-rtk-workbench/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/YunaAloft/dsh-rtk-workbench/releases/latest"><img alt="release" src="https://img.shields.io/github/v/release/YunaAloft/dsh-rtk-workbench?style=flat-square&label=release&color=f59e0b"></a>
+  <img alt="platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-0ea5e9?style=flat-square">
   <a href="LICENSE"><img alt="license" src="https://img.shields.io/npm/l/dsh-rtk-workbench?style=flat-square&color=22c55e"></a>
 </p>
 
@@ -19,7 +22,7 @@
 
 ## Why this exists
 
-rtk (Rust Token Killer) sits between the agent and its tools: it rewrites a command into a filtered form and condenses output before the model reads it. It ships adapters for twenty agents — DSH is not one of them — and the community plugins for DSH cover only half of either half. This plugin closes the loop: **rewrite** (delegated to rtk's rules), **compress** (rtk's own method chain, no reimplementation), **show** (savings land in the counters and are visible in the UI). Every failure path stays open: with rtk missing, slow or answering something unexpected, a tool call behaves exactly as if this plugin were not installed. It registers no new tool, replaces no shell executor and touches no model API.
+rtk (Rust Token Killer) sits between the agent and its tools: it rewrites a command into a filtered form and condenses output before the model reads it. It ships adapters for 18 AI tools (as of rtk 1.2.0) — DSH is not one of them — and the community plugins for DSH each cover only part of rewriting or trimming. This plugin closes the loop: **rewrite** (delegated to rtk's rules), **compress** (rtk's own method chain, no reimplementation), **show** (savings land in the counters and are visible in the UI). Every failure path stays open: with rtk missing, slow or answering something unexpected, a tool call behaves exactly as if this plugin were not installed. It registers no new tool, replaces no shell executor and touches no model API.
 
 ## What you get
 
@@ -38,7 +41,7 @@ Search `dsh-rtk-workbench` in the **plugin panel**, or:
 dsh plugin --profile web add dsh-rtk-workbench
 ```
 
-You can also install the GitHub release asset `dsh-rtk-workbench-<platform>.tgz`. **Restart the host** afterwards (a bundle change is not a page refresh). **rtk itself is not required** — platform binaries ship with the package for Windows x64, macOS x64/arm64 and Linux x64/arm64; other platforms are covered in the [reference manual](./docs/reference.md).
+You can also install the GitHub release asset `dsh-rtk-workbench-<platform>.tgz`. **Restart the host** afterwards (a bundle change is not a page refresh). **rtk itself is not required** — platform binaries ship with the package for Windows x64, macOS x64/arm64 and Linux x64/arm64; other platforms are covered in the [reference manual](./docs/reference.en.md).
 
 ## Quick start
 
@@ -50,31 +53,36 @@ You can also install the GitHub release asset `dsh-rtk-workbench-<platform>.tgz`
 
 Then work as usual: `git status` in a large repository becomes a compact listing; `cat` on a 100 KB log is condensed and points at `rtk recall <hash>` — or at a spilled file the sandbox can read. `status`, `stats`, `tools`, `explain`, `doctor` and `recall` are documented in the reference manual.
 
+## Reporting a problem
+
+- After updating or reinstalling the plugin, **fully quit and reopen DSH** (a page refresh also works) before deciding the problem is still there.
+- Prepare `dsh --version`, the plugin version and install method, and your OS/architecture.
+- Run `/rtk doctor` and paste its output; it contains no command text or tool output.
+- Open a [bug report](https://github.com/YunaAloft/dsh-rtk-workbench/issues/new?template=bug_report.yml) with what happened, what you expected, and a screenshot if you have one.
+
 ## How it works
 
-Rewriting wraps `ToolDefinition.execute` (it does not re-dispatch), keeping the registry's signal fusion and accounting intact; compression runs in `tools/post-execute`, always after `await next()`, so safety plugins and the spill policy still apply. Browser side, the host half serves one read-only `GET /api/rtk-workbench/status`, and the browser half renders `saved X tok · ↓N%` below the composer (in its dock row, beside the host's activity/usage pills; narrow viewports converge in three steps and ≤360px keeps only the icon and dot) with a details overlay behind it. The route answers counts and enums only (no command text, output or paths) behind the host's client-connection fence — Host/Origin checks plus the signed browser cookie, 401 otherwise — and a session switch makes the pill re-read and show "loading" instead of the previous session's numbers.
+- **Rewrite**: wraps `ToolDefinition.execute` (it does not re-dispatch), keeping the registry's signal fusion and accounting intact; rtk's proposal must pass the semantic guard, and a failed rewrite replays the original command marked `[rtk] fell back:`.
+- **Compress**: runs in `tools/post-execute`, always after `await next()`, then calls `rtk hook claude` for shapes above the threshold and replaces the content; file/search results stay untouched, and the original stays recoverable via `rtk recall <hash>`.
+- **Show**: the host half serves one read-only `GET /api/rtk-workbench/status`; the browser half renders `saved X tok · ↓N%` in the composer dock with a details overlay. The route answers counts and enums only, behind the client-connection fence (Host/Origin checks plus the signed cookie, 401 otherwise), and a session switch shows "loading" instead of the previous numbers.
+- **Boundaries**: no new tool, no shell replacement, no model API; results already changed by another transformer or by the host spill policy are left alone.
 
 ```mermaid
 flowchart LR
   M["model calls a tool"] --> X["patched execute"]
-  X -->|rtk rewrite| R{"rewritable?"}
+  X -->|"rtk rewrite proposal"| R{"semantic guard passes?"}
   R -->|yes| E1["run rtk &lt;cmd&gt;"]
   R -->|no| E2["run original"]
-  E1 --> C["tools/post-execute"]
+  E1 -->|"rtk itself failed"| E2
+  E1 --> C["tools/post-execute (after await next)"]
   E2 --> C
-  C -->|≥ threshold| H["rtk hook claude → replace content"]
-  C -->|otherwise| I[return unchanged]
+  C -->|"shape allowed and ≥ threshold"| H["rtk hook claude → replace content"]
+  C -->|otherwise| I["return unchanged"]
 ```
-
-## Measured effect
-
-Deterministic benchmark total: **484 408 B → 40 590 B (−91.6 %)**, about 121.1k → 10.2k estimated tokens. The full table, how to reproduce it and what those numbers do **not** prove are in [the benchmark](./docs/benchmark.md); tokens are estimates, not provider billing.
 
 ## Documentation
 
-- [Reference manual](./docs/reference.md) — commands, config, recovery, compatibility matrix, troubleshooting, design notes
-- [Benchmark](./docs/benchmark.md) — reproducible fixture numbers and their limits
-- [Compatibility ledger](./docs/compatibility.md) — verified hosts, declared ranges, `verify-host`
+- [Reference manual](./docs/reference.en.md) — commands, config, recovery, compatibility matrix, troubleshooting, design notes
 - [Changelog](./CHANGELOG.md) — what each release changed
 
 ## Development
@@ -86,7 +94,7 @@ pnpm test
 pnpm build         # lib/index.js (host) + lib/client.js (browser)
 ```
 
-More scripts (`benchmark`, `release`, `check-manifest`, `check-docs`) are listed in the reference manual.
+More scripts (`benchmark`, `release`, `check-manifest`, `check-docs`) live in `package.json#scripts`.
 
 ## Credits
 
