@@ -179,6 +179,7 @@ describe('session query', () => {
       savedTokens: 30,
       ms: 5,
       ratio: 0.8,
+      rewrites: 2,
       skipped: { size: 0, scope: 0, marked: 0, payload: 0, ptc: 0 },
       errors: { rtk: 0, timeout: 0 },
       byTool: [],

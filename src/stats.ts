@@ -35,6 +35,8 @@ export interface SessionStats {
   outBytes: number
   savedTokens: number
   compressMs: number
+  /** Applied rewrites for this session (the process-wide counter is separate). */
+  rewrites: number
   byTool: Map<string, ToolSaving>
   skipped: Record<SkipReason, number>
   errors: { rtk: number; timeout: number }
@@ -60,11 +62,31 @@ export interface SessionSnapshot {
   readonly savedTokens: number
   readonly ms: number
   readonly ratio: number
+  /** Applied rewrites for this session. */
+  readonly rewrites: number
   readonly skipped: Record<SkipReason, number>
   readonly errors: { rtk: number; timeout: number }
   readonly byTool: readonly ToolSnapshot[]
   readonly recent: readonly RecentEvent[]
   readonly updatedAt: number
+}
+
+/** The anonymous bucket (calls without an agent id) never reaches the disk. */
+const ANONYMOUS = 'anonymous'
+
+/** One session as written to the lifetime ledger (`stats.json` v2). */
+export interface SessionRecord {
+  compressions: number
+  inBytes: number
+  outBytes: number
+  savedTokens: number
+  compressMs: number
+  rewrites: number
+  skipped: Record<SkipReason, number>
+  errors: { rtk: number; timeout: number }
+  lastAt: number
+  byTool: (ToolSaving & { name: string })[]
+  recent: RecentEvent[]
 }
 
 /** Counters that live outside the compression layer. */
@@ -83,6 +105,7 @@ function emptyStats(): SessionStats {
     outBytes: 0,
     savedTokens: 0,
     compressMs: 0,
+    rewrites: 0,
     byTool: new Map(),
     skipped: { size: 0, scope: 0, marked: 0, payload: 0, ptc: 0 },
     errors: { rtk: 0, timeout: 0 },
@@ -104,8 +127,88 @@ const RECENT_LIMIT = 20
  * binary. These counters answer "what did this plugin do in *this* session",
  * never leave memory, and write no file anywhere.
  */
-export function createStats() {
+/** Coerce a persisted number to a non-negative finite value. */
+function num(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
+}
+
+/** Restore one recent event, dropping anything malformed. */
+function parseRecent(raw: unknown): RecentEvent | undefined {
+  if (raw === null || typeof raw !== 'object') return undefined
+  const record = raw as Record<string, unknown>
+  if (record.kind !== 'compress' && record.kind !== 'skip') return undefined
+  const kind = record.kind === 'compress' ? ('compress' as const) : ('skip' as const)
+  const base = { at: num(record.at), tool: typeof record.tool === 'string' ? record.tool : '', kind }
+  if (kind === 'skip') {
+    return typeof record.reason === 'string' ? { ...base, reason: record.reason as SkipReason } : base
+  }
+  const ratio = typeof record.ratio === 'number' && Number.isFinite(record.ratio) ? Math.max(0, Math.min(1, record.ratio)) : 0
+  return { ...base, savedTokens: num(record.savedTokens), ratio }
+}
+
+/** Restore one persisted session; `undefined` when the record is unusable. */
+function parseSessionRecord(raw: unknown): SessionStats | undefined {
+  if (raw === null || typeof raw !== 'object') return undefined
+  const record = raw as Record<string, unknown>
+  const empty = emptyStats()
+  const skipped = { ...empty.skipped }
+  if (record.skipped !== null && typeof record.skipped === 'object') {
+    const source = record.skipped as Record<string, unknown>
+    for (const key of Object.keys(skipped) as SkipReason[]) skipped[key] = num(source[key])
+  }
+  const errors = { ...empty.errors }
+  if (record.errors !== null && typeof record.errors === 'object') {
+    const source = record.errors as Record<string, unknown>
+    errors.rtk = num(source.rtk)
+    errors.timeout = num(source.timeout)
+  }
+  const byTool = new Map<string, ToolSaving>()
+  if (Array.isArray(record.byTool)) {
+    for (const row of record.byTool) {
+      if (row === null || typeof row !== 'object') continue
+      const item = row as Record<string, unknown>
+      if (typeof item.name !== 'string' || item.name === '') continue
+      byTool.set(item.name, {
+        calls: num(item.calls),
+        inBytes: num(item.inBytes),
+        outBytes: num(item.outBytes),
+        savedTokens: num(item.savedTokens),
+      })
+    }
+  }
+  const recent = Array.isArray(record.recent)
+    ? record.recent.flatMap((item): RecentEvent[] => {
+        const event = parseRecent(item)
+        return event === undefined ? [] : [event]
+      })
+    : []
+  const lastAt = num(record.lastAt)
+  // A record without a timestamp was never written by this plugin; drop it.
+  if (lastAt === 0) return undefined
+  return {
+    compressions: num(record.compressions),
+    inBytes: num(record.inBytes),
+    outBytes: num(record.outBytes),
+    savedTokens: num(record.savedTokens),
+    compressMs: num(record.compressMs),
+    rewrites: num(record.rewrites),
+    byTool,
+    skipped,
+    errors,
+    lastAt,
+    recent: recent.slice(-RECENT_LIMIT),
+  }
+}
+
+export function createStats(seed: Record<string, unknown> = {}) {
   const sessions = new Map<string, SessionStats>()
+  // Restore previous sessions before the first event: the pill reads `snapshot`
+  // during the first poll, which can happen before any new compression.
+  for (const [key, value] of Object.entries(seed)) {
+    if (key === ANONYMOUS) continue
+    const restored = parseSessionRecord(value)
+    if (restored !== undefined) sessions.set(key, restored)
+  }
   /** Most recently recorded session; the web UI shows this one as "this session". */
   let active: string | undefined
 
@@ -184,6 +287,40 @@ export function createStats() {
   /** Record an rtk-side failure (never a normal command failure). */
   function recordError(exec: Pick<ToolExecution, 'agent'>, kind: 'rtk' | 'timeout'): void {
     bucket(keyOf(exec)).errors[kind] += 1
+  }
+
+  /** Record one applied rewrite for the call's session. */
+  function recordRewrite(exec: Pick<ToolExecution, 'agent'>): void {
+    const key = keyOf(exec)
+    const stats = bucket(key)
+    stats.rewrites += 1
+    stats.lastAt = Date.now()
+    active = key
+  }
+
+  /**
+   * The sessions worth persisting, JSON-safe and without the anonymous bucket.
+   * Called by the lifetime store on every flush.
+   */
+  function serializeSessions(): Record<string, SessionRecord> {
+    const out: Record<string, SessionRecord> = {}
+    for (const [key, stats] of sessions) {
+      if (key === ANONYMOUS || stats.lastAt === 0) continue
+      out[key] = {
+        compressions: stats.compressions,
+        inBytes: stats.inBytes,
+        outBytes: stats.outBytes,
+        savedTokens: stats.savedTokens,
+        compressMs: stats.compressMs,
+        rewrites: stats.rewrites,
+        skipped: { ...stats.skipped },
+        errors: { ...stats.errors },
+        lastAt: stats.lastAt,
+        byTool: [...stats.byTool].map(([name, tool]) => ({ name, ...tool })),
+        recent: stats.recent.slice(-3),
+      }
+    }
+    return out
   }
 
   /**
@@ -333,6 +470,7 @@ export function createStats() {
       savedTokens: stats.savedTokens,
       ms: Math.round(stats.compressMs),
       ratio: stats.inBytes === 0 ? 0 : Math.max(0, Math.min(1, 1 - stats.outBytes / stats.inBytes)),
+      rewrites: stats.rewrites,
       skipped: { ...stats.skipped },
       errors: { ...stats.errors },
       byTool: [...stats.byTool.entries()]
@@ -349,6 +487,8 @@ export function createStats() {
     recordCompress,
     recordSkipped,
     recordError,
+    recordRewrite,
+    serializeSessions,
     formatLines,
     formatReport,
     toJson,

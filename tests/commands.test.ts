@@ -27,7 +27,7 @@ function baseConfig(): Config {
     maxSpillBytes: 1024 * 1024,
     statsPersist: 'off',
     awarenessEnabled: true,
-    uiPill: true,
+    uiPill: { get: () => true },
     denyEnabled: false,
     pipelineMode: 'plugin-owned',
     annotateRewrites: true,
@@ -70,6 +70,7 @@ function makeHandler(config: Config, overrides: Record<string, unknown> = {}) {
     rewrites: () => ({ calls: 0, fallbacks: 0, learned: [] }),
     foreignTransforms: () => 0,
     capability: () => ({ state: 'ok', detail: 'test' }),
+    setUiPill: async () => {},
     ...overrides,
   } as never)
 }
@@ -104,6 +105,23 @@ describe('/rtk command handler', () => {
   it('rejects an unknown toggle target', async () => {
     const outcome = await makeHandler(baseConfig()).handle({ rawInput: 'off everything', agent: {} })
     expect(outcome.kind).toBe('error')
+  })
+
+  it('persists the pill switch instead of flipping it locally', async () => {
+    const setUiPill = vi.fn(async () => {})
+    const handler = makeHandler(baseConfig(), { setUiPill })
+    expect(await handler.handle({ rawInput: 'off ui', agent: {} })).toEqual({
+      kind: 'success',
+      text: 'ui off (saved)',
+    })
+    expect(setUiPill).toHaveBeenCalledWith(false)
+  })
+
+  it('reports why the pill switch could not be saved', async () => {
+    const setUiPill = vi.fn(async () => { throw new Error('no profile entry is available to save this switch') })
+    const outcome = await makeHandler(baseConfig(), { setUiPill }).handle({ rawInput: 'on ui', agent: {} })
+    expect(outcome.kind).toBe('error')
+    expect(outcome.kind === 'error' ? outcome.text : '').toContain('no profile entry')
   })
 
   it('falls back to help text for an unknown subcommand', async () => {

@@ -1,6 +1,15 @@
 import Schema from '@deepseek-ai/schemastery'
 
 /**
+ * A live config reference: structurally the cosmokit `Volatile<T>` the loader
+ * commits into without remounting the plugin. Read the current value with
+ * `get()`; write through `ctx.settings.update`, never by assignment.
+ */
+interface Live<T> {
+  get(): T
+}
+
+/**
  * Plugin configuration. Every tunable lives here (never hardcoded): the
  * harness validates this Schema at load time and fails loud on invalid
  * values, and each key can be overridden from `cordis.patch.yml` without
@@ -90,10 +99,10 @@ export interface Config {
   awarenessEnabled: boolean
   /**
    * Show the composer-dock pill (and its overlay) in the web GUI. On by default:
-   * the point of the pill is to be seen without a command. `/rtk off ui` hides
-   * it for this session.
+   * the point of the pill is to be seen without a command. Volatile, so
+   * `/rtk off ui` can persist it without remounting the plugin.
    */
-  uiPill: boolean
+  uiPill: Live<boolean>
   /** Honour rtk's `deny` verdict from the PreToolUse bridge. Default off. */
   denyEnabled: boolean
   /**
@@ -121,7 +130,14 @@ export interface Config {
   discoverShellTools: boolean
 }
 
-export const Config: Schema<Config> = Schema.object({
+// Inferred rather than annotated `Schema<Config>`: a volatile field's output is
+// `Volatile<T>` while its input stays `T`, so the two-sided annotation cannot
+// hold. The `Config` interface above stays the runtime shape `apply` receives;
+// `ConfigInput` names the same fields with the volatile wrappers unwrapped, so
+// the emitted .d.ts stays portable.
+type ConfigInput = { [K in keyof Config]: Config[K] extends Live<infer V> ? V : Config[K] }
+
+export const Config: Schema<ConfigInput, Config> = Schema.object({
   rtkPath: Schema.string()
     .default('')
     .description('Explicit path to the rtk binary. Empty = RTK_BIN / DSH_RTK_BIN / bundled / PATH.'),
@@ -211,7 +227,8 @@ export const Config: Schema<Config> = Schema.object({
   awarenessEnabled: Schema.boolean().default(true).description('Inject the rtk awareness section into the system prompt.'),
   uiPill: Schema.boolean()
     .default(true)
-    .description('Show the rtk savings pill and its overlay in the web GUI; `/rtk off ui` hides it for this session.'),
+    .volatile()
+    .description('Show the rtk savings pill and its overlay in the web GUI; `/rtk off ui` persists the choice.'),
   denyEnabled: Schema.boolean().default(false).description("Honour rtk's deny verdict. Off by default: cc-safety-net already covers command blocking."),
   pipelineMode: Schema.union(['auto', 'plugin-owned', 'user'])
     .default('auto')

@@ -29,6 +29,8 @@ export interface CommandsLike {
 export interface CommandContext {
   readonly ctx: Context
   readonly config: Config
+  /** Persist the pill switch into this profile entry; rejects when unavailable. */
+  readonly setUiPill: (enabled: boolean) => Promise<void>
   readonly binary: string
   readonly binarySource: string
   /** Live pipeline state: which pipeline runs, where it lives, and its health. */
@@ -117,7 +119,7 @@ export const HELP_TOPICS: Readonly<Record<string, string>> = {
     "  Every key is in cordis.patch.yml; defaults are in the plugin's Schema.",
     '  Most useful: rewriteEnabled, compressEnabled, pipelineMode, rewriteSandboxGuard,',
     '  rewriteSemanticGuard, compressThresholdBytes / compressThresholdByFamily, spillOriginal,',
-    '  annotateStyle, statsPersist (cross-restart counters), uiPill (the web GUI pill).',
+    '  annotateStyle, statsPersist (cross-restart counters), uiPill (the web GUI pill, persisted).',
     '  The full table is in docs/reference.md.',
   ].join('\n'),
 }
@@ -449,9 +451,17 @@ export function createCommandHandler(context: CommandContext) {
         if (target !== 'rewrite' && target !== 'compress' && target !== 'ui') {
           return { kind: 'error', text: 'usage: /rtk on|off rewrite|compress|ui' }
         }
+        if (target === 'ui') {
+          try {
+            await context.setUiPill(enabled)
+          } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error)
+            return { kind: 'error', text: `ui ${flag(enabled)} failed: ${reason}` }
+          }
+          return { kind: 'success', text: `ui ${flag(enabled)} (saved)` }
+        }
         if (target === 'rewrite') config.rewriteEnabled = enabled
-        else if (target === 'compress') config.compressEnabled = enabled
-        else config.uiPill = enabled
+        else config.compressEnabled = enabled
         return { kind: 'success', text: `${target} ${flag(enabled)}` }
       }
       default:

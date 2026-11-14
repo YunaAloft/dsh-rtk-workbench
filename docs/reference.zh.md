@@ -29,10 +29,12 @@ dsh plugin --profile <profile> add dsh-rtk-workbench
 | `/rtk doctor` | 逐项自检：二进制、`pipeline show/validate/status`、`methods`、`trust`、`hook claude` 往返、recall |
 | `/rtk gain` | 转发 `rtk gain`：rtk 全库统计（不是本会话）；本会话请看 `status` 的 `session` 行 |
 | `/rtk recall <hash>` | 在宿主进程里恢复 rtk 省略的原文；模型 shell 被沙箱隔离时用它 |
-| `/rtk on\|off <rewrite\|compress\|ui>` | 本会话内临时开关；`/rtk off compress` 可用来排查另一个结果变换器，`/rtk off ui` 隐藏界面药丸 |
+| `/rtk on\|off <rewrite\|compress\|ui>` | 开关；`rewrite`/`compress` 只对本会话生效（`/rtk off compress` 可用来排查另一个结果变换器），`ui` 会写回 profile 配置并**持久**（重启后保持），直到 `/rtk on ui` |
 | `/rtk help [topic]` | 命令列表；`topic` 可取 `pipeline`、`sandbox`、`recovery`、`config` |
 
-**界面药丸与浮层。** Web GUI 里插件在输入框下方的 composer dock 行里渲染一个药丸（与宿主的 activity/usage 同一排）——`省 12.4k token · ↓81%`——旁边是压缩与改写次数，守卫计数只在拒绝过之后出现。三种颜色：正常、警示（rtk 不可用或注入的 pipeline 回退）、灰色（压缩已关，或状态路由始终没有应答）。点开是浮层：健康、本会话、累计、按工具、跳过原因、最近三条事件、运行自检与复制诊断。药丸在拿到第一份状态之前不显示，但首次请求失败时会显示灰色 `rtk 不可用` 药丸，浮层里带错误信息——这样 fail-closed 的路由是可见的，不会看起来像插件没加载。可用 `uiPill: false` 或 `/rtk off ui` 关掉。
+**界面药丸与浮层。** Web GUI 里插件在输入框下方的 composer dock 行里渲染一个药丸（与宿主的 activity/usage 同一排）——`省 12.4k tok · ↓81%`——旁边是压缩与改写次数，守卫计数只在拒绝过之后出现。外观与宿主底栏一致：无边框、无底色，主文案用 `label-secondary`、明细与分隔点用 `label-tertiary`，hover 才出现浅背景。药丸开头是一个 14px 图标加状态圆点；空间不足时药丸可被压缩，窄屏按三档收敛：≤767px 隐藏「N 次压缩 · M 次改写」，≤480px 只留「省 X tok」，≤360px 保存态只剩图标与圆点（待命/不可用/已关等状态词保留）。三种颜色：正常、警示（rtk 不可用或注入的 pipeline 回退）、灰色（压缩已关，或状态路由始终没有应答）。点开是浮层：健康、本会话、累计、按工具、跳过原因、最近三条事件、运行自检与复制诊断。药丸在拿到第一份状态之前不显示，但首次请求失败时会显示灰色 `rtk 不可用` 药丸，浮层里带错误信息——这样 fail-closed 的路由是可见的，不会看起来像插件没加载。可用 `uiPill: false` 或 `/rtk off ui` 关掉；后者会写回 profile 配置，重启后仍保持关闭。
+
+**统计持久化。** 累计与会话统计都写入 `<DSH_HOME>/rtk-workbench/stats.json`（格式 v2）：会话按最后一次活动保留最近 512 个、超过 60 天自动清理；只记计数、工具名与时间，不记命令原文或输出。宿主重启后，同一个会话的药丸会恢复到重启前的压缩与改写数字并继续累加；`statsPersist: off` 时两者都不落盘。
 
 浏览器半只读一条宿主半挂在该 profile webserver 上的路由：`GET /api/rtk-workbench/status`（只有计数与枚举，没有命令原文、输出或路径）与 `POST /api/rtk-workbench/doctor`（跑与 `/rtk doctor` 相同的自检）。两条端点都经过宿主 client-connection 的准入检查（Host 围栏防 DNS rebinding、Origin/`sec-fetch-site` 同源检查、签名浏览器 Cookie 认证）：未认证的请求得到 401，跨站或不可信 Host 得到 403；拿不到该服务时路由 fail-closed，一律 401。`GET /status` 接受 `?session=<id>` 返回指定会话的快照（未知 id 回 `session: null`）；浏览器半从会话作用域槽位拿到当前会话 id 传参，切换会话时立即重取，快照 key 与当前会话不一致时先显示「读取中」而不是旧会话的数字。headless profile 没有 webserver，这条路由自然不存在。`/rtk doctor` 的 `web route` 行报告当前暴露状态（已认证 / fail-closed / 未挂载）。
 
@@ -71,8 +73,8 @@ lifetime   : 2 831 compressions, ~1.2M tok saved since 2026-11-05
 | `compressThresholdByFamily` | 见下 | 按命令首词的阈值覆盖，如 `pytest: 512` |
 | `spillOriginal` | `auto` | 把压缩前原文写到会话私有 spill 存储：`auto`（rtk 恢复不可用时）/`always`/`off` |
 | `maxSpillBytes` | `1048576` | 超过此大小不落盘 |
-| `statsPersist` | `aggregate` | 把计数（不含任何文本）持久化到 `<DSH_HOME>/rtk-workbench/stats.json`，重启后累计仍在；`off` 只留在内存 |
-| `uiPill` | `true` | 在 Web GUI 显示省量药丸与浮层；`/rtk off ui` 本会话隐藏 |
+| `statsPersist` | `aggregate` | 把累计与会话计数（不含任何文本）持久化到 `<DSH_HOME>/rtk-workbench/stats.json`，重启后累计与本会话数字仍在（会话最多 512 条 / 60 天）；`off` 只留在内存 |
+| `uiPill` | `true` | 在 Web GUI 显示省量药丸与浮层；`/rtk off ui` 会写回 profile 配置并持久（重启后保持），`/rtk on ui` 恢复 |
 | `awarenessEnabled` | `true` | 注入提示段（只在探测确认 rtk 可用后注入） |
 | `denyEnabled` | `false` | 遵守 rtk 的 deny 判定；DSH 无宿主权限规则，默认关 |
 | `pipelineMode` | `auto` | `auto` 尊重已有用户 pipeline；`plugin-owned` 总是注入；`user` 不注入 |
