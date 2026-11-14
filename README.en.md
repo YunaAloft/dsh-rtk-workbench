@@ -27,7 +27,7 @@ rtk (Rust Token Killer) sits between the agent and its tools: it rewrites a comm
 |---|---|---|
 | **Command rewriting** | on | `git status` runs as `rtk git status` and the result starts with `[rtk] ran:`; the semantic guard proves the rewrite still runs the original command (`next build` maps to `rtk next`, a proposal that drops an argument is refused), and a failed rewrite replays the original with `[rtk] fell back:` |
 | **Output compression** | on (≥ 2 KB) | `rtk hook claude` condenses large output; file and search results are skipped by default; `rtk recall <hash>` stays available, and a sandboxed shell gets a spilled path it can read |
-| **Visible savings** | on | Token estimate (ASCII ÷4, CJK ×0.6) plus cross-restart totals; the pill is there at a glance, `/rtk stats` has the detail |
+| **Visible savings** | on | Token estimate (ASCII ÷4, CJK ×0.6) plus cross-restart totals, and this conversation's numbers survive a restart too; the pill is there at a glance, `/rtk stats` has the detail |
 | **/rtk commands** | always | `status`, `stats`, `tools`, `explain`, `doctor`, `gain`, `recall`, `on/off` |
 
 ## Install
@@ -45,14 +45,14 @@ You can also install the GitHub release asset `dsh-rtk-workbench-<platform>.tgz`
 ```
 /rtk status     # binary, pipeline, switches, this session's savings
 /rtk stats      # full report; --json for machines
-/rtk off ui     # hide the savings pill below the composer
+/rtk off ui     # hide the savings pill for good (writes the profile config; stays hidden across restarts until /rtk on ui)
 ```
 
 Then work as usual: `git status` in a large repository becomes a compact listing; `cat` on a 100 KB log is condensed and points at `rtk recall <hash>` — or at a spilled file the sandbox can read. `status`, `stats`, `tools`, `explain`, `doctor` and `recall` are documented in the reference manual.
 
 ## How it works
 
-Rewriting wraps `ToolDefinition.execute` (it does not re-dispatch), keeping the registry's signal fusion and accounting intact; compression runs in `tools/post-execute`, always after `await next()`, so safety plugins and the spill policy still apply. Browser side, the host half serves one read-only `GET /api/rtk-workbench/status`, and the browser half renders `saved X token · ↓N%` below the composer (in its dock row, beside the host's activity/usage pills) with a details overlay behind it. The route answers counts and enums only (no command text, output or paths) behind the host's client-connection fence — Host/Origin checks plus the signed browser cookie, 401 otherwise — and a session switch makes the pill re-read and show "loading" instead of the previous session's numbers.
+Rewriting wraps `ToolDefinition.execute` (it does not re-dispatch), keeping the registry's signal fusion and accounting intact; compression runs in `tools/post-execute`, always after `await next()`, so safety plugins and the spill policy still apply. Browser side, the host half serves one read-only `GET /api/rtk-workbench/status`, and the browser half renders `saved X tok · ↓N%` below the composer (in its dock row, beside the host's activity/usage pills; narrow viewports converge in three steps and ≤360px keeps only the icon and dot) with a details overlay behind it. The route answers counts and enums only (no command text, output or paths) behind the host's client-connection fence — Host/Origin checks plus the signed browser cookie, 401 otherwise — and a session switch makes the pill re-read and show "loading" instead of the previous session's numbers.
 
 ```mermaid
 flowchart LR
