@@ -6,6 +6,7 @@
 
 | 宿主（`@deepseek-ai/dsh`） | rtk | 验证日期 | 证据 | 说明 |
 |---|---|---|---|---|
+| `0.2.2-rc.3` | `1.2.0` | 2026-11-14 | `pnpm typecheck`（host + client 两个编译面）；`pnpm test`（18 文件、235 用例）；`pnpm build`；`check-manifest`（46）；`check-docs`（18）；`verify-host`；Windows x64 的 web profile 用本地 1.1.2-test.1 包验收（药丸布局与外观、`/rtk off ui` 重启后保持、会话统计重启后恢复）；同一版本在 Linux arm64（dsh-go）用内置二进制验收通过 | 1.1.2（2026-11-14 发布）。dsh-go 那端的宿主版本未单独记录 |
 | `0.2.2-rc.1` | `1.2.0` | 2026-11-13 | `pnpm typecheck`（host + client 两个编译面）；`pnpm test`（18 文件、225 用例）；`pnpm build`；`check-manifest`；`check-docs`；`verify-host`；web profile 用本地 1.1.1-test.0 包验收（`web route` authenticated、401/403、药丸与会话切换） | 1.1.1 |
 | `0.2.2-rc.1` | `1.2.0` | 2026-11-12 | `pnpm typecheck`（host + client 两个编译面）；`pnpm test`（18 文件、220 用例）；`check-manifest`；`check-docs`；`build-vendor` 走 1.2.0 发布（5 平台、checksums 校验通过）；Windows vendor 二进制冒烟（`rtk 1.2.0 --version`）；确定性基准重跑（484 408 B → 40 590 B） | 1.1.0（2026-11-12 发布） |
 | `0.2.2-rc.1` | `1.1.0` | 2026-11-05 | `pnpm typecheck`（host + client 两个编译面）；`pnpm test`（17 文件、200 用例）；`check-manifest`；`check-docs`；打包产物的 `smoke-pack`；维护者桌面冒烟（药丸 + 浮层、改写、压缩、`recall`） | 1.0.0 目标版本 |
