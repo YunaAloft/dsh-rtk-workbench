@@ -39,6 +39,10 @@ const check = (condition, label) => {
   else failures.push(label)
 }
 
+/** Read a config value that may be a volatile reference (`uiPill` is one). */
+const configValue = (value) =>
+  typeof value === 'object' && value !== null && typeof value.get === 'function' ? value.get() : value
+
 try {
   execFileSync('tar', ['-xzf', archive, '-C', directory], { stdio: 'inherit' })
   const root = join(directory, 'package')
@@ -85,7 +89,7 @@ try {
   check(Array.isArray(host.inject) && host.inject.includes('tools'), 'host half injects tools')
   const defaults = host.Config({})
   check(defaults.statsPersist === 'aggregate', 'statsPersist defaults to aggregate')
-  check(defaults.uiPill === true, 'uiPill defaults to true')
+  check(configValue(defaults.uiPill) === true, 'uiPill defaults to true')
   check(defaults.rewriteSemanticGuard === 'enforce', 'semantic guard defaults to enforce')
 
   // The browser half registers a factory with the page module table.
