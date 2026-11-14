@@ -27,7 +27,7 @@ rtk（Rust Token Killer）站在 agent 和工具之间：把命令改写成过�
 |---|---|---|
 | **命令改写** | 开 | `git status` 以 `rtk git status` 执行，首行标 `[rtk] ran:`；语义守卫确认改写仍在跑原命令（`next build` 走 `rtk next`，丢参数的提案被拒），rtk 跑不起来时重放原命令并标 `[rtk] fell back:` |
 | **输出压缩** | 开（≥ 2 KB） | `rtk hook claude` 压缩大输出，文件/搜索结果默认跳过；保留 `rtk recall <hash>`，沙箱够不到 rtk 库时原文落盘并给出路径 |
-| **节省可见** | 开 | token 估算（ASCII ÷4、汉字 ×0.6）＋跨重启累计；界面药丸随时可瞥，`/rtk stats` 查明细 |
+| **节省可见** | 开 | token 估算（ASCII ÷4、汉字 ×0.6）＋跨重启累计，本会话数字重启后也保留；界面药丸随时可瞥，`/rtk stats` 查明细 |
 | **/rtk 命令组** | 常驻 | `status`、`stats`、`tools`、`explain`、`doctor`、`gain`、`recall`、`on/off` |
 
 ## Install
@@ -45,14 +45,14 @@ dsh plugin --profile web add dsh-rtk-workbench
 ```
 /rtk status     # 二进制、pipeline、开关、本会话省量
 /rtk stats      # 完整报告；--json 给机器读
-/rtk off ui     # 隐藏输入框下方的省量药丸
+/rtk off ui     # 永久隐藏输入框下方的省量药丸（写回配置，重启后仍隐藏，直到 /rtk on ui）
 ```
 
 之后正常干活：大仓库里的 `git status` 变成紧凑结果；`cat` 一个 100 KB 日志会被压缩并指向 `rtk recall <hash>`，沙箱里则给出可直接读的落盘路径。`status`、`stats`、`tools`、`explain`、`doctor`、`recall` 的完整说明在参考手册。
 
 ## How it works
 
-改写靠包装 `ToolDefinition.execute`（不是重派发），保留注册表的信号融合与记账；压缩在 `tools/post-execute` 里先 `await next()` 再做内容替换，因此安全插件与 spill 策略照常生效。界面侧，宿主半提供只读 `GET /api/rtk-workbench/status`，浏览器半在输入框下方（composer 的 dock 行，与宿主的 activity/usage 同一排）显示「省 X token · ↓N%」，点开是明细浮层。这条路由只回计数与枚举（没有命令原文、输出或路径），且经过宿主 client-connection 的 Host/Origin 围栏与签名 Cookie 认证，未认证一律 401；切换会话时药丸立即重取并先显示「读取中」，不渲染上一个会话的旧数字。
+改写靠包装 `ToolDefinition.execute`（不是重派发），保留注册表的信号融合与记账；压缩在 `tools/post-execute` 里先 `await next()` 再做内容替换，因此安全插件与 spill 策略照常生效。界面侧，宿主半提供只读 `GET /api/rtk-workbench/status`，浏览器半在输入框下方（composer 的 dock 行，与宿主的 activity/usage 同一排）显示「省 X tok · ↓N%」（窄屏按三档收敛，≤360px 只留图标与圆点），点开是明细浮层。这条路由只回计数与枚举（没有命令原文、输出或路径），且经过宿主 client-connection 的 Host/Origin 围栏与签名 Cookie 认证，未认证一律 401；切换会话时药丸立即重取并先显示「读取中」，不渲染上一个会话的旧数字。
 
 ```mermaid
 flowchart LR

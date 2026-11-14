@@ -2,6 +2,23 @@
 
 All notable changes to `dsh-rtk-workbench`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.1.2] — 2026-11-14
+
+Fixes the mobile composer-dock layout reported in #15, matches the pill to the host's dock readings, keeps the pill switch across restarts (#14), and keeps this conversation's counters after a restart.
+
+### Fixed
+
+- The pill no longer refuses to shrink. It gets `min-width: 0` and an ellipsis on the savings segment, so a cramped dock compresses the pill instead of squeezing the host's own readings down to their icons. Narrow viewports converge in three steps: ≤767px drops the compression/rewrite counts, ≤480px keeps only `saved X tok`, and ≤360px collapses the savings state to icon plus dot while state words (ready / unusable / off) stay readable and unshrunk.
+- The leading icon now follows the theme. The SVG rectangles had no `fill`, so they rendered black in the dark theme; they inherit `currentColor` instead.
+- `/rtk off ui` and `/rtk on ui` now persist. `uiPill` is a volatile config field, so the host commits the new value into the running plugin without remounting it, and the command writes the profile config instead of only mutating memory. Restarting the host keeps the choice. When there is no profile entry to write to (headless embedding) or a higher config layer shadows the field, the command reports why rather than pretending the switch was saved.
+- This conversation's counters survive a host restart. Session records (compressions, bytes, savings, rewrites, by-tool rows, recent events) are written to `stats.json` v2 alongside the lifetime totals: the newest 512 sessions are kept by last activity and anything older than 60 days is dropped. Only counts, tool names and timestamps are stored. `statsPersist: off` disables both layers.
+
+### Changed
+
+- The pill now matches the host's dock readings: no border and no background, a 14px leading icon with the state dot, the headline in `label-secondary` and the detail in `label-tertiary`, with a hover background instead of a permanent frame.
+- Rewrites are counted per session as well as per process, so the pill's `N compressions · M rewrites` line stays meaningful after a restart.
+- The token unit in the pill, the overlay rows and the overlay footnote is now `tok`, matching the host's own readings (`86.3M tok`).
+
 ## [1.1.1] — 2026-11-13
 
 Fixes the status-route admission race that could leave the savings pill invisible on desktop and web profiles, and keeps an unreachable route visible in the UI.

@@ -53,8 +53,8 @@ export interface RewriteLayerOptions {
   readonly onRtkFailure?: (exec: ToolRunContext) => void
   /** Called once per rtk timeout, for session counters. */
   readonly onTimeout?: (exec: ToolRunContext) => void
-  /** Called once per applied rewrite, for lifetime counters. */
-  readonly onRewrite?: () => void
+  /** Called once per applied rewrite, for session and lifetime counters. */
+  readonly onRewrite?: (exec: ToolRunContext) => void
   /** Called once per proposal the semantic guard rejected, for lifetime counters. */
   readonly onGuardRejected?: () => void
   /** How long one rewrite answer is reused; 0 disables the cache. */
@@ -256,7 +256,7 @@ export function createRewriteLayer(options: RewriteLayerOptions) {
       const target = absolutizeRtk(outcome.command, binary, dialect)
       applied.set(exec, { from: command, to: target, proposal: outcome.command })
       rewrites += 1
-      options.onRewrite?.()
+      options.onRewrite?.(exec)
       let result: unknown
       try {
         const next = { ...(args as Record<string, unknown>), command: target }

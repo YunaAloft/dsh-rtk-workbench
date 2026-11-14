@@ -112,3 +112,39 @@ describe('session stats', () => {
     expect(parsed.lifetime).toBeNull()
   })
 })
+
+describe('session persistence', () => {
+  it('counts applied rewrites per session', () => {
+    const stats = createStats()
+    stats.recordCompress(call('s1'), 1000, 200, 300, 40)
+    stats.recordRewrite(call('s1'))
+    stats.recordRewrite(call('s1'))
+    stats.recordRewrite(call('s2'))
+    expect(stats.snapshot('s1')?.rewrites).toBe(2)
+    expect(stats.snapshot('s2')?.rewrites).toBe(1)
+  })
+
+  it('round-trips the persisted session map and skips the anonymous bucket', () => {
+    const first = createStats()
+    first.recordCompress(call('s1'), 1000, 200, 300, 40)
+    first.recordRewrite(call('s1'))
+    first.recordSkipped(call('s1'), 'size')
+    first.recordCompress({ name: 'bash', agent: undefined } as never, 10, 5, 1, 1)
+    const saved = first.serializeSessions()
+    expect(Object.keys(saved)).toEqual(['s1'])
+    const second = createStats(saved)
+    const view = second.snapshot('s1')
+    expect(view?.compressions).toBe(1)
+    expect(view?.savedTokens).toBe(300)
+    expect(view?.rewrites).toBe(1)
+    expect(view?.skipped.size).toBe(1)
+    expect(view?.byTool[0]).toMatchObject({ name: 'bash', calls: 1 })
+    expect(second.snapshot('anonymous')).toBeUndefined()
+  })
+
+  it('ignores malformed seed records', () => {
+    const stats = createStats({ broken: 'nope', stamp: { lastAt: 'never' } })
+    expect(stats.snapshot('broken')).toBeUndefined()
+    expect(stats.snapshot('stamp')).toBeUndefined()
+  })
+})

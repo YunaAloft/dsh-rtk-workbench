@@ -11,6 +11,7 @@ import { describeRun, resolveRtk, runRtk } from './rtk/exec'
 import { inspectPipeline, pipelineEnv, userPipelineCompresses } from './rtk/pipeline'
 import { spillOriginal } from './rtk/spill'
 import { createStats } from './stats'
+import type { SessionRecord } from './stats'
 import { createLifetimeStore, defaultStatsFile } from './stats-file'
 import { commandOf, decideTool, isShellLike } from './toolmap'
 import { createConnectionAdmission, mountStatusRoute, type ConnectionFence, type InjectingContext } from './web/status-route'
@@ -31,6 +32,17 @@ export { Config }
 interface LoggerLike {
   info?(message: string): void
   warn?(message: string): void
+}
+
+/** The slice of the Host settings service this plugin writes through. */
+interface SettingsFormsLike {
+  describe(): readonly { readonly ns: string; readonly revision: number }[]
+  update(ns: string, patch: object, expectedRevision?: number): Promise<void>
+}
+
+/** The Loader's `fiber.entry` augmentation, read structurally. */
+interface FiberEntryLike {
+  entry?: { options?: { id?: string } }
 }
 
 /** Cached outcome of the start-up capability probe. */
@@ -123,16 +135,21 @@ async function denyVerdict(
  * @param rawConfig - validated plugin config.
  */
 export function apply(ctx: Context, rawConfig: ConfigShape): void {
-  // A mutable copy: `/rtk on|off` flips switches for this session without
-  // rewriting the loader config (which is static after load).
+  // A shallow copy keeps runtime `/rtk on|off rewrite|compress` flips local to
+  // this session. `uiPill` is a volatile config reference, so the copy shares the
+  // same box: `/rtk off ui` persists through the Host instead of assigning here.
   const config: ConfigShape = { ...rawConfig }
   /**
-   * Cross-restart counters. Counts only (never command text or output), loaded
-   * synchronously so early calls are not lost, flushed in the background.
+   * Cross-restart counters. Counts, tool names and timestamps only (never
+   * command text or output), loaded synchronously so early calls are not lost,
+   * flushed in the background. The session map is read at flush time; the
+   * holder breaks the creation order (the stats store is built after this one).
    */
+  let sessionSource: (() => Record<string, SessionRecord>) | undefined
   const lifetime = createLifetimeStore({
     enabled: config.statsPersist === 'aggregate',
     file: defaultStatsFile(),
+    sessions: () => sessionSource?.() ?? {},
   })
   lifetime.load()
   ctx.effect(() => () => {
@@ -300,14 +317,18 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
       lifetime.record({ kind: 'fallback' })
     },
     onTimeout: (exec) => stats.recordError(exec, 'timeout'),
-    onRewrite: () => lifetime.record({ kind: 'rewrite' }),
+    onRewrite: (exec) => {
+      stats.recordRewrite(exec)
+      lifetime.record({ kind: 'rewrite' })
+    },
     onGuardRejected: () => lifetime.record({ kind: 'guard' }),
   })
   ctx.effect(() => () => rewrites.dispose())
 
   let foreignTransforms = 0
   const debug = process.env.RTK_WORKBENCH_DEBUG === '1'
-  const stats = createStats()
+  const stats = createStats(lifetime.sessionsSnapshot())
+  sessionSource = () => stats.serializeSessions()
   /**
    * Whether this call's compressed result needs the original text spilled.
    *
@@ -422,9 +443,35 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
   // The command handler is built before the web route because `/doctor` on that
   // route reuses the same diagnostics; registering the command itself still
   // waits for the service.
+  /**
+   * Persist the pill switch into this plugin's profile entry. A volatile-only
+   * write is committed into the running fiber without remounting, so the
+   * session counters survive; the Host refuses a field shadowed by a higher
+   * config layer, and that refusal is surfaced to the command.
+   */
+  async function persistUiPill(enabled: boolean): Promise<void> {
+    const settings = ctx.get('settings') as SettingsFormsLike | undefined
+    const entry = (ctx.fiber as unknown as FiberEntryLike).entry?.options?.id
+    if (settings === undefined || entry === undefined) {
+      throw new Error('no profile entry is available to save this switch')
+    }
+    const write = (): Promise<void> => {
+      const view = settings.describe().find(row => row.ns === entry)
+      return settings.update(entry, { uiPill: enabled }, view?.revision)
+    }
+    try {
+      await write()
+    } catch (error) {
+      // A concurrent settings write bumped the revision; re-read it once.
+      if ((error as { code?: string }).code !== 'SETTINGS_CONFLICT') throw error
+      await write()
+    }
+  }
+
   const commandHandler = createCommandHandler({
       ctx,
       config,
+      setUiPill: persistUiPill,
       binary,
       binarySource: resolution.source,
       pipeline: () => ({
@@ -491,7 +538,7 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
         awareness: config.awarenessEnabled,
         guard: config.rewriteSemanticGuard,
         deny: config.denyEnabled,
-        ui: config.uiPill,
+        ui: config.uiPill.get(),
       }),
       rewrites: () => ({
         calls: rewrites.rewriteCount(),
