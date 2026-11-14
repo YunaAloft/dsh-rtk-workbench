@@ -1,44 +1,44 @@
-# dsh-rtk-workbench reference (1.0.1)
+# dsh-rtk-workbench 参考手册（1.1.2）
 
-Applies to DSH `0.2.2-rc.1`, rtk `1.2.0`, Node `^22.19.0 || >=24`. Restart `dsh web` after installing — a bundle change is not a page refresh.
+适用：DSH `0.2.2-rc.3`（运行期验证；兼容线 `0.2.x`，`dshTarget` 随 1.2.0 更新）、rtk `1.2.0`、Node `^22.19.0 || >=24`。安装后需要重启 `dsh web`（bundle 变更不是刷新页面）。
 
-## 1. Install and verify
+## 1. 安装与验证
 
 ```sh
 dsh plugin --profile <profile> add dsh-rtk-workbench
 ```
 
-After the restart:
+装完重启，然后：
 
 ```
-/rtk status     # binary, source, pipeline health, switches, this session's savings
-/rtk doctor     # deep check: version, pipeline, a real round trip, recall, trust
-/rtk tools      # how each visible tool resolved (canonical / alias / explicit)
+/rtk status     # 二进制、来源、pipeline 健康、开关、本会话省量
+/rtk doctor     # 深度自检：版本、pipeline、一次真实往返、recall、trust
+/rtk tools      # 每个可见工具如何被识别（规范名 / 别名 / 显式配置）
 ```
 
-The `binary` line names the source: `bundled` (shipped with the package), `path` (`rtk` on PATH), or `config`/`env` (explicit override). Resolution order: `rtkPath` → `RTK_BIN` / `DSH_RTK_BIN` → bundled platform package → `rtk` on PATH.
+`binary` 行写明来源：`bundled`（随包二进制，推荐）、`path`（PATH 上的 rtk）、`config`/`env`（显式指定）。解析顺序：`rtkPath` → `RTK_BIN` / `DSH_RTK_BIN` → 内置平台包 → PATH 上的 `rtk`。
 
-## 2. Commands
+## 2. 命令参考
 
-| Command | What it does |
+| 命令 | 作用 |
 |---|---|
-| `/rtk status` | Binary and source, probe result, version, recall store, pipeline mode and health, rewrite/compress/awareness switches, patched tools, this session's savings and skip reasons |
-| `/rtk stats [--json]` | Full session report: compressions, bytes in/out, time, per tool, rewrites and fallbacks, learned verbs, error counters |
-| `/rtk tools` | Tool resolution detail: `canonical`, `alias` (e.g. `ops_bash`), `explicit` |
-| `/rtk explain <cmd>` | Why a command would (not) be rewritten: the local pre-filter plus rtk's own `rtk hook check` decision |
-| `/rtk doctor` | Item-by-item self-check: binary, `pipeline show/validate/status`, `methods`, `trust`, a `hook claude` round trip, recall |
-| `/rtk gain` | Forwards to `rtk gain` — rtk-wide totals, not this session |
-| `/rtk recall <hash>` | Restores elided text in the host process; use it when the model shell is sandboxed away from rtk's store |
-| `/rtk on\|off <rewrite\|compress\|ui>` | Toggle; `rewrite`/`compress` apply to this session (`/rtk off compress` isolates a competing result transformer), while `ui` writes the profile config and **persists** across restarts until `/rtk on ui` |
-| `/rtk help [topic]` | Command list; `topic` is `pipeline`, `sandbox`, `recovery` or `config` |
+| `/rtk status` | 二进制与来源、探测结果、版本、recall 库状态、pipeline 模式与健康、改写/压缩/说明开关、已打补丁的工具、本会话省量与跳过原因 |
+| `/rtk stats [--json]` | 本会话完整报告：压缩次数、输入/输出字节、耗时、按工具拆分、改写次数与回退、学习到的禁用动词、错误计数 |
+| `/rtk tools` | 工具识别明细：`canonical`（官方名）、`alias`（如 `ops_bash`）、`explicit`（仅被显式列出） |
+| `/rtk explain <命令>` | 为什么这条命令会/不会被改写：本地预过滤（方言、排除表、熔断）+ `rtk hook check` 的正式判定 |
+| `/rtk doctor` | 逐项自检：二进制、`pipeline show/validate/status`、`methods`、`trust`、`hook claude` 往返、recall |
+| `/rtk gain` | 转发 `rtk gain`：rtk 全库统计（不是本会话）；本会话请看 `status` 的 `session` 行 |
+| `/rtk recall <hash>` | 在宿主进程里恢复 rtk 省略的原文；模型 shell 被沙箱隔离时用它 |
+| `/rtk on\|off <rewrite\|compress\|ui>` | 开关；`rewrite`/`compress` 只对本会话生效（`/rtk off compress` 可用来排查另一个结果变换器），`ui` 会写回 profile 配置并**持久**（重启后保持），直到 `/rtk on ui` |
+| `/rtk help [topic]` | 命令列表；`topic` 可取 `pipeline`、`sandbox`、`recovery`、`config` |
 
-**Web pill and overlay.** In the web GUI the plugin renders one pill in the composer dock row under the input box (beside the host's activity/usage pills) — `saved 12.4k tok · ↓81%` — with the compression and rewrite counts beside it and the guard count only after a rejection. It matches the host's dock readings: no border and no background, the headline in `label-secondary`, the detail and separator in `label-tertiary`, and a soft background only on hover. The pill leads with a 14px icon and a state dot; it shrinks when space is short, and narrow viewports converge in three steps: ≤767px drops the compression/rewrite counts, ≤480px keeps only `saved X tok`, and ≤360px collapses the savings state to icon plus dot (state words such as ready/unavailable/off stay). Three colours: normal, warning (rtk unusable, or the injected pipeline fell back), grey (compression switched off, or the status route never answered). Clicking it opens an overlay with health, this session, lifetime, by-tool rows, skip reasons, the last three events, a self-check button and a diagnostics copy action. The pill is hidden until the first status document arrives, except that a failed first fetch renders a grey `rtk unavailable` pill whose overlay shows the error, so a fail-closed route is visible instead of looking like the plugin never loaded. It can be turned off with `uiPill: false` or `/rtk off ui`; the command writes the profile config and stays off across restarts.
+**界面药丸与浮层。** Web GUI 里插件在输入框下方的 composer dock 行里渲染一个药丸（与宿主的 activity/usage 同一排）——`省 12.4k tok · ↓81%`——旁边是压缩与改写次数，守卫计数只在拒绝过之后出现。外观与宿主底栏一致：无边框、无底色，主文案用 `label-secondary`、明细与分隔点用 `label-tertiary`，hover 才出现浅背景。药丸开头是一个 14px 图标加状态圆点；空间不足时药丸可被压缩，窄屏按三档收敛：≤767px 隐藏「N 次压缩 · M 次改写」，≤480px 只留「省 X tok」，≤360px 有省量时主文案收起，只留图标与圆点（待命/不可用/已关等状态词保留）。三种颜色：正常、警示（rtk 不可用或注入的 pipeline 回退）、灰色（压缩已关，或状态路由始终没有应答）。点开是浮层：健康、本会话、累计、按工具、跳过原因、最近三条事件、运行自检与复制诊断。药丸在拿到第一份状态之前不显示，但首次请求失败时会显示灰色 `rtk 不可用` 药丸，浮层里带错误信息——这样 fail-closed 的路由是可见的，不会看起来像插件没加载。可用 `uiPill: false` 或 `/rtk off ui` 关掉；后者会写回 profile 配置，重启后仍保持关闭。
 
-**Counter persistence.** Lifetime totals and per-session counters share `<DSH_HOME>/rtk-workbench/stats.json` (format v2): sessions are kept by last activity up to 512 entries and dropped after 60 days; only counts, tool names and timestamps are stored — never command text or output. After a host restart, the same conversation's pill resumes its compression and rewrite numbers and keeps accumulating. `statsPersist: off` disables both.
+**统计持久化。** 累计与会话统计都写入 `<DSH_HOME>/rtk-workbench/stats.json`（格式 v2）：会话按最后一次活动保留最近 512 个、超过 60 天自动清理；只记计数、工具名与时间，不记命令原文或输出。宿主重启后，同一个会话的药丸会恢复到重启前的压缩与改写数字并继续累加；`statsPersist: off` 时两者都不落盘。
 
-The browser half reads one read-only route the host half mounts on the profile's webserver: `GET /api/rtk-workbench/status` (counts and enums only — no command text, output or paths) and `POST /api/rtk-workbench/doctor` (runs the same diagnostics as `/rtk doctor`). Both endpoints sit behind the host's client-connection admission fence — a Host header fence against DNS rebinding, Origin/`sec-fetch-site` same-origin checks, and the signed browser cookie: unauthenticated requests get 401, cross-site or untrusted Hosts get 403, and if that service is missing the route fails closed (401 for everything). `GET /status` accepts `?session=<id>` to serve one session's snapshot (an unknown id answers `session: null`); the browser half learns its session id from the session-scoped slot, refetches immediately on a session switch, and renders "loading" instead of the previous session's numbers while the snapshot key does not match. A headless profile has no webserver, so the route is simply absent there. `/rtk doctor` reports the route's exposure in its `web route` line (authenticated / fail-closed / not mounted).
+浏览器半只读一条宿主半挂在该 profile webserver 上的路由：`GET /api/rtk-workbench/status`（只有计数与枚举，没有命令原文、输出或路径）与 `POST /api/rtk-workbench/doctor`（跑与 `/rtk doctor` 相同的自检）。两条端点都经过宿主 client-connection 的准入检查（Host 围栏防 DNS rebinding、Origin/`sec-fetch-site` 同源检查、签名浏览器 Cookie 认证）：未认证的请求得到 401，跨站或不可信 Host 得到 403；拿不到该服务时路由 fail-closed，一律 401。`GET /status` 接受 `?session=<id>` 返回指定会话的快照（未知 id 回 `session: null`）；浏览器半从会话作用域槽位拿到当前会话 id 传参，切换会话时立即重取，快照 key 与当前会话不一致时先显示「读取中」而不是旧会话的数字。headless profile 没有 webserver，这条路由自然不存在。`/rtk doctor` 的 `web route` 行报告当前暴露状态（已认证 / fail-closed / 未挂载）。
 
-Example `/rtk status` summary:
+`/rtk status` 的 `session` 行示例：
 
 ```
 session    : 12 compressions 48.2 KB → 9.1 KB (-81%, ~9.8k tok saved), 1.4 s, 3 rewrites
@@ -47,138 +47,161 @@ learned    : rewrite suppressed for ls
 lifetime   : 2 831 compressions, ~1.2M tok saved since 2026-11-05
 ```
 
-## 3. Configuration
+## 3. 配置
 
-Every key can be overridden from `cordis.patch.yml`; values are validated at load time.
+所有键都在 `cordis.patch.yml` 里可覆盖，加载期校验，非法值直接报错。
 
-| Key | Default | Meaning |
+| 键 | 默认 | 说明 |
 |---|---|---|
-| `rtkPath` | `''` | Explicit binary; empty = `RTK_BIN` / `DSH_RTK_BIN` / bundled / PATH |
-| `rtkSource` | `auto` | `auto` prefers the bundled binary; `path` resolves through PATH |
-| `timeoutMs` | `2000` | Steady-state per-call budget; a timeout means no rewrite and no compression |
-| `coldStartTimeoutMs` | `8000` | First-call budget; scanning an unsigned binary takes 2.7–5.8 s on first spawn |
-| `rewriteEnabled` | `true` | Master switch for rewriting |
-| `rewriteFallback` | `retry` | Replay the original command when rtk itself failed (rtk failure signatures only) |
-| `rewriteSandboxGuard` | `auto` | Windows + confined sandbox skips rewrites (see `help sandbox`); `off` forces them |
-| `rewriteSemanticGuard` | `enforce` | Verify the proposal still runs the original command; `off` trusts rtk's stdout. `next build` → `rtk next` is accepted (rtk injects `build`); `python -m pytest` → `rtk pytest` is refused |
-| `shellTools` | `['bash','pwsh']` | Names treated as shells for detection |
-| `rewriteTools` | `['bash','ops_bash','pwsh']` | Tools eligible for rewriting; `discoverShellTools` also accepts shell-like names |
-| `rewriteExcludeCommands` | `['cat','type','bat','less','more','head','tail']` | Command words never rewritten |
-| `compressEnabled` | `true` | Master switch for compression |
-| `compressTools` | `['*']` | Tools eligible for compression; `*` = every text result |
-| `excludeTools` | `[]` | Tools never touched |
-| `compressThresholdBytes` | `2048` | Global compression threshold |
-| `maxPayloadBytes` | `2097152` | Skip above this (rtk caps hook stdin at 64 MiB) |
-| `compressFileTools` | `false` | Also compress file-reading tools (off: the host already bounds them and rtk's cap would truncate requested source) |
-| `compressThresholdByFamily` | see below | Per-verb threshold overrides, e.g. `pytest: 512` |
-| `spillOriginal` | `auto` | Spill the pre-compression text to session-private storage: `auto` (when rtk recall is unreachable) / `always` / `off` |
-| `maxSpillBytes` | `1048576` | Do not spill above this size |
-| `statsPersist` | `aggregate` | Persist lifetime and per-session counts (never text) to `<DSH_HOME>/rtk-workbench/stats.json` so both survive a restart (up to 512 sessions / 60 days); `off` keeps them in memory |
-| `uiPill` | `true` | Show the savings pill and its overlay in the web GUI; `/rtk off ui` writes the profile config and persists across restarts, `/rtk on ui` restores it |
-| `awarenessEnabled` | `true` | Inject the prompt section (only after the probe proves rtk works) |
-| `denyEnabled` | `false` | Honour rtk's deny verdict; DSH has no host permission rules, so this stays off |
-| `pipelineMode` | `auto` | `auto` respects an existing user pipeline; `plugin-owned` always injects; `user` never injects |
-| `annotateRewrites` | `true` | Add the `[rtk] ran:` line |
-| `annotateStyle` | `short` | `short` names the bare `rtk <cmd>`; `full` includes the absolute binary path |
-| `annotateMinBytes` | `500` | Skip the annotation below this body size |
-| `rewriteCacheTtlMs` | `600000` | Reuse one rewrite answer per `cwd + command`; 0 disables |
-| `discoverShellTools` | `true` | Treat shell-like tool names as shells even when unlisted |
+| `rtkPath` | `''` | 显式二进制路径；空 = `RTK_BIN`/`DSH_RTK_BIN`/内置/PATH |
+| `rtkSource` | `auto` | `auto` 优先内置；`path` 只走 PATH |
+| `timeoutMs` | `2000` | 稳态单次调用预算；超时 = 不改写/不压缩 |
+| `coldStartTimeoutMs` | `8000` | 首次调用预算；平台扫描未签名二进制时 2.7–5.8 s 很常见 |
+| `rewriteEnabled` | `true` | 改写总开关 |
+| `rewriteFallback` | `retry` | rtk 自身失败时是否重放原命令（只认 rtk 的失败签名） |
+| `rewriteSandboxGuard` | `auto` | Windows 受限沙箱下跳过改写（见 `help sandbox`）；`off` 强制 |
+| `rewriteSemanticGuard` | `enforce` | 校验改写结果仍在执行原命令；`off` 直接信任 rtk 的输出。`next build` → `rtk next` 被接受（rtk 会注入 `build`），`python -m pytest` → `rtk pytest` 被拒绝 |
+| `shellTools` | `['bash','pwsh']` | 用于识别的 shell 名 |
+| `rewriteTools` | `['bash','ops_bash','pwsh']` | 允许改写的工具名；`discoverShellTools` 打开时额外识别 shell 风格名字 |
+| `rewriteExcludeCommands` | `['cat','type','bat','less','more','head','tail']` | 永远不改写的命令词 |
+| `compressEnabled` | `true` | 压缩总开关 |
+| `compressTools` | `['*']` | 允许压缩的工具；`*` = 全部文本结果 |
+| `excludeTools` | `[]` | 任何情况下都不碰的工具 |
+| `compressThresholdBytes` | `2048` | 全局压缩阈值 |
+| `maxPayloadBytes` | `2097152` | 超过就跳过（rtk 的 hook stdin 上限 64 MiB） |
+| `compressFileTools` | `false` | 是否也压文件读取工具的结果（默认否：宿主已限长，rtk 的 cap 会截断你要的源码） |
+| `compressThresholdByFamily` | 见下 | 按命令首词的阈值覆盖，如 `pytest: 512` |
+| `spillOriginal` | `auto` | 把压缩前原文写到会话私有 spill 存储：`auto`（rtk 恢复不可用时）/`always`/`off` |
+| `maxSpillBytes` | `1048576` | 超过此大小不落盘 |
+| `statsPersist` | `aggregate` | 把累计与会话计数（不含任何文本）持久化到 `<DSH_HOME>/rtk-workbench/stats.json`，重启后累计与本会话数字仍在（会话最多 512 条 / 60 天）；`off` 只留在内存 |
+| `uiPill` | `true` | 在 Web GUI 显示省量药丸与浮层；`/rtk off ui` 会写回 profile 配置并持久（重启后保持），`/rtk on ui` 恢复 |
+| `awarenessEnabled` | `true` | 注入提示段（只在探测确认 rtk 可用后注入） |
+| `denyEnabled` | `false` | 遵守 rtk 的 deny 判定；DSH 无宿主权限规则，默认关 |
+| `pipelineMode` | `auto` | `auto` 尊重已有用户 pipeline；`plugin-owned` 总是注入；`user` 不注入 |
+| `annotateRewrites` | `true` | 是否加 `[rtk] ran:` 行 |
+| `annotateStyle` | `short` | `short` 写裸 `rtk <cmd>`；`full` 带绝对二进制路径 |
+| `annotateMinBytes` | `500` | 结果短于此值不加注解 |
+| `rewriteCacheTtlMs` | `600000` | 同 `cwd + 命令` 的改写答案复用时长；0 关闭缓存 |
+| `discoverShellTools` | `true` | 把 shell 风格的新工具名也当作 shell |
 
-`compressThresholdByFamily` defaults: `pytest`, `cargo`, `docker`, `git`, `npm`, `pnpm`, `yarn`, `make`, `go`, `mvn`, `gradle` at 512 B; anything else uses `compressThresholdBytes`.
+`compressThresholdByFamily` 默认：`pytest`、`cargo`、`docker`、`git`、`npm`、`pnpm`、`yarn`、`make`、`go`、`mvn`、`gradle` 均为 512 B；未列出的用 `compressThresholdBytes`。
 
-`RTK_DB_PATH` and `RTK_TEE_DIR` are deliberately **not** overridden: the model runs `rtk recall` through the ordinary shell, and redirecting the tee/DB would make recovery impossible.
+`RTK_DB_PATH` 与 `RTK_TEE_DIR` **刻意不覆盖**：`rtk recall` 是模型在普通 shell 里跑的，重定向 tee/DB 会让恢复彻底失效。
 
-## 4. What the model sees
+## 4. 模型侧会看到什么
 
-- `[rtk] ran: rtk git status` — the command ran in rtk form (`annotateStyle: full` adds the binary path).
-- `[rtk] fell back: git status` — rtk could not run; the original command was replayed, and that verb is suppressed for the session.
-- `[rtk] <note>` — rtk's own warning, e.g. that a Read output was format-converted and must not be used as an `Edit` `old_string`.
-- `[rtk] original saved: <path> — …` — the original text is in session-private spill storage; read or grep it directly.
-- `rtk recall <hash>` at the end — rtk's own recovery pointer.
-- One static prompt section, registered only after the probe succeeds.
+- `[rtk] ran: rtk git status`：这条命令被改写成 rtk 形式执行（`annotateStyle: full` 时带二进制路径）。
+- `[rtk] fell back: git status`：rtk 自己没能跑起来，插件重放了原命令；该命令词本会话内不再改写。
+- `[rtk] <提示>`：rtk 自带的提醒，例如 Read 输出被格式转换（toon/摘要）时警告不要用转换后的文本拼 `Edit` 的 `old_string`。
+- `[rtk] original saved: <path> — …`：压缩前的原文落到了会话私有 spill 文件，可直接 `read`/`grep`。
+- 结果末尾的 `rtk recall <hash>`：rtk 自己的恢复指针。
+- 系统提示里的一段静态说明（只在探测通过后注入）。
 
-## 5. Recovery
+## 5. 恢复原文
 
-1. `[rtk] original saved: <path>` → read that path (works inside a sandbox).
-2. `rtk recall <hash>` → run it in a normal shell, or ask the user to run `/rtk recall <hash>` (the host process is not sandboxed).
-3. Neither present and the result looks incomplete → `/rtk doctor` for recall and pipeline state.
+1. 结果里有 `[rtk] original saved: <path>` → 直接读该路径（沙箱内也可以）。
+2. 结果里有 `rtk recall <hash>` → 普通 shell 可读 rtk 库时执行 `rtk recall <hash>`；否则让用户运行 `/rtk recall <hash>`（宿主进程不受沙箱限制）。
+3. 两者都没有且结果明显残缺 → `/rtk doctor` 看 recall 与 pipeline 状态。
 
-## 6. Compatibility
+## 6. 兼容性
 
-| Component | Version |
+| 组件 | 版本 |
 |---|---|
-| DeepSeek Harness | `0.2.2-rc.1` (target; `dshTarget` in `package.json`) |
-| rtk | `1.2.0` (bundled; `dshRtkVersion`) |
+| DeepSeek Harness | `0.2.2-rc.1`（目标；`package.json` 的 `dshTarget`；运行期已在 `0.2.2-rc.3` 验证） |
+| rtk | `1.2.0`（内置；`dshRtkVersion`） |
 | Node | `^22.19.0 || >=24` |
-| Plugin | `1.0.1` |
+| 插件 | `1.1.2` |
 
-The matrix describes the plugin's *observable* behaviour. "skipped" always means
-"refused before spawning", never "tried and failed silently".
+**已验证宿主。** 每次发布前新增或刷新一行；证据来自该提交上的门禁与实机冒烟。
 
-| Environment | Rewrite | Compress | Recover | Notes |
+| 宿主 | rtk | 验证日期 | 证据 | 说明 |
 |---|---|---|---|---|
-| Linux x64/arm64 native | full | full | full | Preferred: bash native, rtk native, store writable |
-| macOS x64/arm64 native | full | full | full | Same as Linux; the unit suite runs on macOS in CI, and both macOS binaries are smoked by the `binary` jobs |
-| Windows + `danger-full-access` | full | full | full | Verified on the maintainer's machine; `ls`/`grep` rewrites work |
-| Windows + `workspace-write` | **skipped** | full | spill | The host denies rtk its child process (`os error 5`); `rewriteSandboxGuard: off` forces and will fail |
-| Windows + `read-only` | **skipped** | full | spill | Same denial; nothing is writable |
-| Windows + `wsl.exe` as the shell backend | unsupported | partial | spill | Windows `rtk.exe` is invisible inside the distro; set `rewriteTools: []` |
-| DSH inside WSL (Linux host) | full | full | full | Treated as Linux |
+| `0.2.2-rc.3` | `1.2.0` | 2026-11-14 | typecheck + 235 用例 + build + manifest/docs + `verify-host`；Windows x64 与 Linux arm64（dsh-go）实机验收 | 1.1.2 |
+| `0.2.2-rc.1` | `1.2.0` | 2026-11-13 | typecheck + 225 用例 + build + manifest/docs + `verify-host`；web profile 验收 | 1.1.1 |
+| `0.2.2-rc.1` | `1.2.0` | 2026-11-12 | typecheck + 220 用例；`build-vendor` 5 平台 + checksums；基准复跑 | 1.1.0 |
+| `0.2.2-rc.1` | `1.1.0` | 2026-11-05 | typecheck + 200 用例；`smoke-pack`；维护者桌面冒烟 | 1.0.0 目标 |
+| `0.2.1-rc.5` | `1.1.0` | 2026-11-03 | typecheck + 145 用例；Windows 11 冒烟 | 0.2.0 目标，历史 |
+| `0.2.1-rc.3` / `rc.4` | `1.1.0` | 2026-11-01 | M0 headless 实测（退出码、hook 往返、沙箱） | 0.1.x 线，历史 |
 
-`spill` means the original text is saved through the host's spill store and named in the result when rtk's own recall is unreachable.
+**声明范围。**
 
-**Coexistence.** Shell tools republished under another name (e.g. an `ops_` prefix) are recognised through the alias table and `discoverShellTools`; rewriting calls the tool's own `execute`, so the owning plugin's sandboxing still applies. The compression listener always awaits `next()` first, then transforms the content the downstream decision carries; when another transformer replaced it, `/rtk status` reports `observed: another result transformer changed N result(s)` without naming the plugin. If another plugin keeps replacing our `execute` wrapper, the plugin stops re-wrapping after three attempts and reports it under `skipped`. Results already replaced by the host spill policy carry a marker and are not compressed again. `RTK_CONFIG_DIR` is only set for the plugin's own spawns (and only in `plugin-owned`/`auto`); the user's `config.toml` and `filters.toml` are never overridden.
-
-**Co-installation matrix.** "Cannot" means both plugins claim the same host seam and only one can be active.
-
-| Co-installed plugin | Result | What to do |
+| 字段 | 范围 | 含义 |
 |---|---|---|
-| Shell-executor replacements (`dsh-rtk`, `dsh-bash-rtk`, `dsh-pwsh-rtk-rewrite`) | Cannot coexist: each replaces `ctx.shell`, which the host allows once per context | Pick one; disable the others |
-| `dsh-rtk-bridge` (also wraps `execute`) | Both try to own the wrapper; one stops re-wrapping after three attempts and reports `skipped` | Prefer one rewriter; check `/rtk status` |
-| `dsh-router-ext-rtk` (short-circuits `tools/execute`) | Its rewrite runs first; this plugin sees an `rtk` prefix, skips rewriting, and still compresses the result | Safe, single rewrite |
-| `dsh-token-saver` (trims in `tools/post-execute`) | Safe: its trimming markers are recognised and this layer leaves the text alone | No double trimming |
-| `billion-context` (folds old dialogue, ACP markers) | Safe: ACP-marked content is skipped | None |
+| `engines.dsh` | `>=0.2.0-0 <0.3.0` | 可加载的宿主线 |
+| `@deepseek-ai/dsh-tools`（peer） | `>=0.1.2-rc.1 <0.3.0` | 工具运行时契约 |
+| `@deepseek-ai/cordis`（peer） | `^4.0.2` | 插件/上下文运行时 |
 
-**Semantic guard.** Before executing a proposal, the plugin checks that every rewritten segment still carries the original command: a plain prefix (`git status` → `rtk git status`), a `gradle` → `gradlew` mapping, a `next build [args]` → `rtk next [args]` mapping (rtk's `next` always injects the `build` subcommand, so no argument is lost), or a `read` mapping whose path and line window survive. A proposal that dropped a token — rtk 1.2.0 turns `python -m pytest` into `rtk pytest` — is refused, the original command runs, and the call is counted under `guard` in `/rtk stats`. `/rtk explain <command>` shows the verdict and names the mapping that proved equivalence. Rejected rewrites still get post-execute compression on their output.
+检查本机或指定宿主：`node scripts/verify-host.mjs`（探测本机）、`--host-version <ver>`（指定版本）、`--self-test`（自测范围匹配器）；逐项校验 `engines.dsh` 与 peer 范围，不匹配时非零退出。
 
-**Token figures.** Savings are estimated from both texts at compression time: ASCII-dense characters price at 0.25 tokens each, CJK characters and full-width forms at 0.6. The byte delta is never used as a proxy, because mixed Chinese and English output has no single bytes-per-token ratio. Every surface — `/rtk stats`, `--json`, the pill, the overlay, the benchmark and the README — reads the same function; `tests/tokens.test.ts` pins it and `tests/benchmark-tokens.test.ts` keeps the benchmark script's copy in sync. It is an estimate, not provider billing.
+"已验证"指该提交上的门禁全绿，且维护者把打好的 tarball 装进干净 profile、重启宿主后跑过 `/rtk status`、`/rtk doctor`、一次改写与一次压缩；不声称覆盖所有平台 × 沙箱 × 同装组合。
 
-**Version policy.** Platform subpackages share the main package's version and record the bundled rtk version; a DSH upgrade re-runs the compatibility check against the new tag before release. The reference rtk source is the release tag matching the bundled binary (`v1.2.0`), never `develop`.
+下表描述插件的**可观察行为**；`skipped` 一律指"在 spawn 之前就拒绝"，不是"试了但静默失败"。
 
-## 7. Troubleshooting
+| 环境 | 改写 | 压缩 | 恢复 | 说明 |
+|---|---|---|---|---|
+| Linux x64/arm64 原生 | 完整 | 完整 | 完整 | 首选：bash 原生、rtk 原生、库可写 |
+| macOS x64/arm64 原生 | 完整 | 完整 | 完整 | 同 Linux；单测在 CI 的 macOS runner 上跑，两个 macOS 二进制由 `binary` job 冒烟 |
+| Windows + `danger-full-access` | 完整 | 完整 | 完整 | 维护者机器实测；`ls`/`grep` 改写可用 |
+| Windows + `workspace-write` | **跳过** | 完整 | spill | 宿主拒绝 rtk 派生子进程（`os error 5`）；`rewriteSandboxGuard: off` 强制并会失败 |
+| Windows + `read-only` | **跳过** | 完整 | spill | 同样的拒绝；且没有可写目录 |
+| Windows + WSL 作为 shell 后端 | 未支持 | 部分 | spill | Windows 的 `rtk.exe` 在发行版里不可见；建议 `rewriteTools: []` |
+| DSH 跑在 WSL（Linux 宿主） | 完整 | 完整 | 完整 | 按 Linux 处理 |
 
-| Symptom | Cause | Fix |
+`spill` 指 rtk 自己的 recall 不可达时，原文经宿主 spill 存储落盘并在结果里给出路径。
+
+**共存。** 以别名重新发布的 shell 工具（如 `ops_` 前缀）通过别名表与 `discoverShellTools` 识别；改写调用工具自己的 `execute`，所以其宿主的沙箱语义仍然生效。压缩监听器永远先 `await next()`，再变换下游决策携带的内容；别的变换器改过内容时，`/rtk status` 会显示 `observed: another result transformer changed N result(s)`，不点名插件。若别的插件持续替换我们的 `execute` 包装，插件在三次之后停止重包并在 `skipped` 里说明。已被宿主 spill 策略替换的结果带标记，不会被再次压缩。`RTK_CONFIG_DIR` 只给插件自己的 spawn 设置（且只在 `plugin-owned`/`auto` 下），用户的 `config.toml` 与 `filters.toml` 从不被覆盖。
+
+**共存矩阵。** "不可"表示两者抢同一个宿主缝，同一时刻只能有一个生效。
+
+| 同装插件 | 结果 | 处理 |
 |---|---|---|
-| `rtk is not usable` | Missing binary or timeout | Check the `probe` line; allow the cold start; set `rtkPath` |
-| Compression never fires | Below threshold, skipped by scope, or pipeline fell back | `/rtk stats` for `skipped`; `/rtk doctor` for `validate`/`pl status` |
-| `compress : on` but zero savings | Injected pipeline failed and rtk fell back to `rtk:default` | The `pipeline` line and the `compress` warning; `/rtk doctor` |
-| A command fails unexpectedly | rtk could not spawn the real command | The sandbox guard already skips these; turn `rewriteSandboxGuard` back on |
-| `rtk recall` reports a store error | Sandboxed shell | Ask the user for `/rtk recall`, or read the spill path |
-| One verb keeps failing | The environment cannot run it | It is tripped; see the `learned` line |
-| A rewritten command looks like a different command | rtk's proposal dropped an argument (`python -m pytest` → `rtk pytest`) | The semantic guard runs the original; see `guard` in `/rtk stats` and `/rtk explain <cmd>` |
-| Results look changed by someone else | Another result transformer | The `observed` line; compare with `/rtk off compress` |
-| The pill never appears | Headless profile (no webserver), the route failed to mount, or the UI switch is off | `/rtk status` still works; check `uiPill` and `/rtk on ui` |
-| `platform pkg: none for …` in `/rtk doctor` | rtk publishes no build for this platform (e.g. Windows arm64) | Point `rtkPath` at an rtk on PATH or inside WSL, or use a different plugin |
+| 执行器替换类（`dsh-rtk`、`dsh-bash-rtk`、`dsh-pwsh-rtk-rewrite`） | **不可同装**：都替换 `ctx.shell`，宿主每个 context 只允许一个实现 | 只选一个，其余禁用 |
+| `dsh-rtk-bridge`（也包装 `execute`） | 两者争同一个包装；其中一方在三次重包后停止并在 `skipped` 里说明 | 只留一个改写器；看 `/rtk status` |
+| `dsh-router-ext-rtk`（短路 `tools/execute`） | 它先改写；本插件看到 `rtk` 前缀就跳过改写，压缩照常 | 安全，只会改写一次 |
+| `dsh-token-saver`（在 `tools/post-execute` 裁剪） | 安全：它的裁剪标记会被识别，本层不再动那段文本 | 不会二次裁剪 |
+| `billion-context`（折叠旧对话、ACP 标记） | 安全：带 ACP 标记的内容直接跳过 | 无需处理 |
 
-## 8. Known limitations (host differences, not missing work)
+**语义守卫。** 执行改写结果前，插件逐段确认它仍在执行原命令：普通前缀（`git status` → `rtk git status`）、`gradle` → `gradlew` 映射、`next build [args]` → `rtk next [args]` 映射（rtk 的 `next` 固定注入 `build` 子命令，所以没有丢参数），或路径与行数都保留的 `read` 映射。任何丢了参数的提案——rtk 1.2.0 会把 `python -m pytest` 变成 `rtk pytest`——会被拒绝，原命令照跑，并在 `/rtk stats` 的 `guard` 计数里体现。`/rtk explain <命令>` 给出判定并说明是哪种映射证明的等价。被拒的改写仍会照常走 post-execute 压缩。
 
-- DSH has no PreToolUse command-rewrite hook; a plugin can only wrap tool execution.
-- DSH has no `RTK.md` include; a static prompt section replaces it.
-- `rtk session` / `discover` / `learn` read Claude Code history and have no DSH counterpart.
-- rtk's deny rules read `~/.claude` permissions; DSH has no such rules, so deny stays off.
-- A Windows confined sandbox cannot let rtk spawn the real command, so rewriting is unavailable there (compression still works).
-- `fish` wrapping, `rtk init` claiming DSH, and the Windows-with-WSL backend are unsupported.
-- The pill and overlay exist only in the web GUI; headless and CLI surfaces use `/rtk status`.
-- Token figures are an estimate with a fixed heuristic; no provider tokenizer is available offline.
+**token 口径。** 节省量由压缩发生时的前后文本各自估算：ASCII 稠密字符按每字符 0.25 token，汉字与全角形式按每字符 0.6 token。绝不用字节差反推，因为中英混排没有统一的字节/token 比。所有界面——`/rtk stats`、`--json`、药丸、浮层、基准脚本与 README——读同一个函数；`tests/tokens.test.ts` 钉住公式，`tests/benchmark-tokens.test.ts` 保证基准脚本里的副本同步。它是估算，不是服务商计费口径。
 
-## 9. Design notes
+**版本策略。** 平台子包与主包同版本并记录内置 rtk 版本；DSH 升级后按新 tag 重跑兼容检查再发版。rtk 的参考源码用与内置二进制一致的发布 tag（`v1.2.0`），不用 `develop`。
 
-- The plugin wraps `ToolDefinition.execute` rather than re-dispatching, so registry signal fusion and accounting are preserved.
-- It treats rtk as a pure function (`rtk rewrite` in/out strings, `rtk hook claude` in/out JSON); DSH has no hook to install.
-- The pipeline is plugin-owned via `RTK_CONFIG_DIR`, and `auto` removes that override when the user's pipeline already compresses.
-- A failed rewrite is replayed as the original command and that verb is suppressed, so a broken environment degrades to a normal command.
-- Compression scope follows the call shape (file/search results stay untouched) and the original is spilled when rtk recall is unreachable.
-- Session counters live in memory: they answer "what did this plugin do in this session", not what rtk's global database says. Aggregates (counts only) are also appended to `<DSH_HOME>/rtk-workbench/stats.json` so the totals survive a restart.
-- Savings are priced from the before/after texts at compression time and accumulated in tokens; the ledger stores counts, never command text or output.
-- The browser half writes nothing: it reads one read-only route, renders, and disposes its poll and styles with the plugin lifecycle.
-- A Windows confined sandbox skips rewrites up front because rtk cannot spawn the wrapped command there; compression is unaffected.
+## 7. 故障排查
+
+| 症状 | 原因 | 处理 |
+|---|---|---|
+| `rtk is not usable` | 二进制缺失/超时 | 看 `status` 的 `probe` 行；冷启动多等一次；或设 `rtkPath` |
+| 压缩从不生效 | 结果低于阈值、被 `scope` 跳过、pipeline 回退 | `/rtk stats` 看 `skipped`；`/rtk doctor` 看 `validate`/`pl status` |
+| `compress : on` 但省量为 0 | injected pipeline 失效（回退 `rtk:default`） | `status` 的 `pipeline` 行与 `compress` 告警；`/rtk doctor` |
+| 命令莫名失败 | rtk 派生子进程被拒（沙箱） | `rewriteSandboxGuard` 默认已抑制；若强制打开则关掉 |
+| `rtk recall` 报 store 错误 | shell 被沙箱隔离 | 让用户 `/rtk recall`，或读 spill 路径 |
+| 一个动词反复失败 | 运行环境跑不了该动词 | 已被熔断；`status` 的 `learned` 行确认 |
+| 改写后像是另一条命令 | rtk 的提案丢了参数（`python -m pytest` → `rtk pytest`） | 语义守卫会跑原命令；看 `/rtk stats` 的 `guard` 与 `/rtk explain <命令>` |
+| 结果被别的插件改过 | 另一个结果变换器在跑 | `status` 的 `observed` 行；`/rtk off compress` 对比 |
+| 界面药丸不出现 | headless profile（没有 webserver）、路由挂载失败，或 UI 开关被关 | `/rtk status` 仍可用；检查 `uiPill` 与 `/rtk on ui` |
+| `/rtk doctor` 显示 `platform pkg: none for …` | rtk 没有为该平台发布构建（如 Windows arm64） | 用 `rtkPath` 指向 PATH 或 WSL 里的 rtk，或换用别的插件 |
+
+## 8. 已知限制（宿主差异，不是实现缺陷）
+
+- DSH 没有 PreToolUse 命令改写钩子，插件只能包装工具执行；无法让宿主本身改写命令。
+- DSH 没有 `RTK.md` 注入机制，改用静态提示段。
+- `rtk session` / `discover` / `learn` 读 Claude Code 的历史数据，对 DSH 无意义。
+- rtk 的 deny 规则读 `~/.claude` 权限配置，DSH 没有这套语义，因此默认关闭。
+- Windows 受限沙箱下 rtk 无法派生真实命令，改写物理不可用（压缩不受影响）。
+- `fish` 脚本包装、`rtk init` 认领 DSH、Windows 上的 WSL 后端均无对应支持。
+- 药丸与浮层只存在于 Web GUI；headless 与纯 CLI 场景用 `/rtk status`。
+- token 数字是固定启发式的估算；离线拿不到服务商分词器。
+
+## 9. 设计说明
+
+- 包装 `ToolDefinition.execute` 而不重派发，保留注册表的信号融合与记账。
+- 把 rtk 当纯函数用（`rtk rewrite` 字符串进出、`rtk hook claude` JSON 进出）；DSH 没有可装的 hook。
+- pipeline 通过 `RTK_CONFIG_DIR` 自管；`auto` 在用户 pipeline 已能压缩时撤掉覆盖。
+- 改写失败重放原命令并拉黑该动词，坏环境退化成"普通命令"而不是"坏命令"。
+- 压缩范围按调用形状决定（文件/搜索不动）；rtk recall 不可达时把原文落盘。
+- 会话计数与累计都会写入 `<DSH_HOME>/rtk-workbench/stats.json`（v2）：会话按最后活动保留最近 512 个、超过 60 天清理；只存计数，不存命令与输出。
+- 节省量在压缩发生时按前后文本估算并以 token 累计，不是服务商计费口径。
+- 浏览器半不写任何东西：只读一条路由、只渲染，随插件生命周期释放轮询与样式。
+- Windows 受限沙箱直接跳过改写（rtk 无法派生子进程），压缩不受影响。
+- 改写结果先过语义守卫：只接受前缀、`gradle→gradlew`、参数保留的 `next build→rtk next` 与 `read` 映射，其余退回原命令。

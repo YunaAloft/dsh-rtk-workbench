@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { HELP, HELP_TOPICS } from '../src/commands'
 
 /** Long-form manual must keep up with the in-terminal help. */
-const english = readFileSync(new URL('../docs/reference.md', import.meta.url), 'utf8')
-const chinese = readFileSync(new URL('../docs/reference.zh.md', import.meta.url), 'utf8')
+const english = readFileSync(new URL('../docs/reference.en.md', import.meta.url), 'utf8')
+const chinese = readFileSync(new URL('../docs/reference.md', import.meta.url), 'utf8')
 
 describe('help and reference stay in sync', () => {
   it('documents every subcommand on both manuals', () => {

@@ -87,7 +87,7 @@ export const HELP = [
 /**
  * Short topic texts for `/rtk help <topic>`.
  *
- * The long-form manual lives in `docs/reference.md`; this map is the same
+ * The long-form manual lives in `docs/reference.en.md`; this map is the same
  * information in the place a terminal user can actually reach, and the test
  * suite checks the two stay in sync.
  */
@@ -120,7 +120,7 @@ export const HELP_TOPICS: Readonly<Record<string, string>> = {
     '  Most useful: rewriteEnabled, compressEnabled, pipelineMode, rewriteSandboxGuard,',
     '  rewriteSemanticGuard, compressThresholdBytes / compressThresholdByFamily, spillOriginal,',
     '  annotateStyle, statsPersist (cross-restart counters), uiPill (the web GUI pill, persisted).',
-    '  The full table is in docs/reference.md.',
+    '  The full table is in docs/reference.en.md.',
   ].join('\n'),
 }
 

@@ -9,6 +9,9 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/dsh-rtk-workbench"><img alt="npm" src="https://img.shields.io/npm/v/dsh-rtk-workbench?style=flat-square&color=6c5ce7"></a>
   <a href="https://www.npmjs.com/package/dsh-rtk-workbench"><img alt="downloads" src="https://img.shields.io/npm/dm/dsh-rtk-workbench?style=flat-square&color=4b6fff"></a>
+  <a href="https://github.com/YunaAloft/dsh-rtk-workbench/actions/workflows/ci.yml"><img alt="ci" src="https://github.com/YunaAloft/dsh-rtk-workbench/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/YunaAloft/dsh-rtk-workbench/releases/latest"><img alt="release" src="https://img.shields.io/github/v/release/YunaAloft/dsh-rtk-workbench?style=flat-square&label=release&color=f59e0b"></a>
+  <img alt="platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-0ea5e9?style=flat-square">
   <a href="LICENSE"><img alt="license" src="https://img.shields.io/npm/l/dsh-rtk-workbench?style=flat-square&color=22c55e"></a>
 </p>
 
@@ -19,7 +22,7 @@
 
 ## Why this exists
 
-rtk（Rust Token Killer）站在 agent 和工具之间：把命令改写成过滤版，并在模型读到工具输出之前先压一遍。官方为 20 个 agent 写了适配层，DSH 不在其中；社区已有的 DSH 插件也只补了「改写」或「裁剪」的一半。这个插件把三件事一次补齐：**改写**（委托 rtk 的规则）、**压缩**（真 rtk 方法链，不重造引擎）、**可见**（省下的 token 进统计，也在界面上一眼看到）。失败路径全部开放：rtk 缺失、超时或返回意料之外的东西时，工具调用和没装这个插件时一样。它不注册新工具、不替换 shell 执行器、不碰模型 API。
+rtk（Rust Token Killer）站在 agent 和工具之间：把命令改写成过滤版，并在模型读到工具输出之前先压一遍。官方（rtk 1.2.0）为 18 个 AI 工具写了适配层，DSH 不在其中；社区已有几个 DSH 插件，但分别只覆盖「改写」或「裁剪」的一部分。这个插件把三件事一次补齐：**改写**（委托 rtk 的规则）、**压缩**（真 rtk 方法链，不重造引擎）、**可见**（省下的 token 进统计，也在界面上一眼看到）。失败路径全部开放：rtk 缺失、超时或返回意料之外的东西时，工具调用和没装这个插件时一样。它不注册新工具、不替换 shell 执行器、不碰模型 API。
 
 ## What you get
 
@@ -38,7 +41,7 @@ rtk（Rust Token Killer）站在 agent 和工具之间：把命令改写成过�
 dsh plugin --profile web add dsh-rtk-workbench
 ```
 
-也可以直接装 GitHub Release 上的 `dsh-rtk-workbench-<platform>.tgz`。装完**重启宿主**（bundle 变更不是刷新页面）。**不需要单独安装 rtk**——平台二进制随包分发，覆盖 Windows x64、macOS x64/arm64、Linux x64/arm64；其它平台见 [参考手册](./docs/reference.zh.md)。
+也可以直接装 GitHub Release 上的 `dsh-rtk-workbench-<platform>.tgz`。装完**重启宿主**（bundle 变更不是刷新页面）。**不需要单独安装 rtk**——平台二进制随包分发，覆盖 Windows x64、macOS x64/arm64、Linux x64/arm64；其它平台见 [参考手册](./docs/reference.md)。
 
 ## Quick start
 
@@ -50,31 +53,36 @@ dsh plugin --profile web add dsh-rtk-workbench
 
 之后正常干活：大仓库里的 `git status` 变成紧凑结果；`cat` 一个 100 KB 日志会被压缩并指向 `rtk recall <hash>`，沙箱里则给出可直接读的落盘路径。`status`、`stats`、`tools`、`explain`、`doctor`、`recall` 的完整说明在参考手册。
 
+## Reporting a problem
+
+- 更新或重装插件后，先**完全退出并重新打开 DSH**（刷新页面也可以），再判断问题是否还在。
+- 提 issue 前准备好：`dsh --version`、插件版本与安装方式、系统与架构。
+- 运行 `/rtk doctor`，把输出贴进 issue；它不含命令原文与工具输出。
+- 用 [bug 表单](https://github.com/YunaAloft/dsh-rtk-workbench/issues/new?template=bug_report.yml) 提交，写明发生了什么、期望什么，有截图更好。
+
 ## How it works
 
-改写靠包装 `ToolDefinition.execute`（不是重派发），保留注册表的信号融合与记账；压缩在 `tools/post-execute` 里先 `await next()` 再做内容替换，因此安全插件与 spill 策略照常生效。界面侧，宿主半提供只读 `GET /api/rtk-workbench/status`，浏览器半在输入框下方（composer 的 dock 行，与宿主的 activity/usage 同一排）显示「省 X tok · ↓N%」（窄屏按三档收敛，≤360px 只留图标与圆点），点开是明细浮层。这条路由只回计数与枚举（没有命令原文、输出或路径），且经过宿主 client-connection 的 Host/Origin 围栏与签名 Cookie 认证，未认证一律 401；切换会话时药丸立即重取并先显示「读取中」，不渲染上一个会话的旧数字。
+- **改写**：包装 `ToolDefinition.execute`（不重派发），保留注册表的信号融合与记账；rtk 的改写提案先过语义守卫，失败时重放原命令并标 `[rtk] fell back:`。
+- **压缩**：在 `tools/post-execute` 里先 `await next()`，再按调用形状与阈值调用 `rtk hook claude` 替换 content；文件/搜索类默认不动，原文可用 `rtk recall <hash>` 找回。
+- **可见**：宿主半提供只读 `GET /api/rtk-workbench/status`，浏览器半在 composer dock 渲染「省 X tok · ↓N%」与明细浮层；路由只回计数与枚举，经 Host/Origin 围栏与签名 Cookie 认证，未认证一律 401，切会话先显示「读取中」。
+- **边界**：不注册新工具、不替换 shell、不碰模型 API；别的插件改过或宿主 spill 过的结果不会被二次处理。
 
 ```mermaid
 flowchart LR
-  M["模型调用工具"] --> X[包装后的 execute]
-  X -->|rtk rewrite| R{"能改写？"}
+  M["模型调用工具"] --> X["包装后的 execute"]
+  X -->|"rtk rewrite 提案"| R{"语义守卫通过？"}
   R -->|是| E1["执行 rtk &lt;cmd&gt;"]
   R -->|否| E2["执行原命令"]
-  E1 --> C["tools/post-execute"]
+  E1 -->|rtk 自身失败| E2
+  E1 --> C["tools/post-execute（先 await next）"]
   E2 --> C
-  C -->|≥ 阈值| H["rtk hook claude → 替换 content"]
-  C -->|否则| I[原样返回]
+  C -->|"形状允许且 ≥ 阈值"| H["rtk hook claude → 替换 content"]
+  C -->|否则| I["原样返回"]
 ```
-
-## Measured effect
-
-确定性基准合计 **484 408 B → 40 590 B（−91.6 %）**，约 121.1k → 10.2k 估算 token。完整表格、复现方法与「这些数字不能证明什么」见 [基准测试](./docs/benchmark.zh.md)；token 为估算值，不是服务商计费口径。
 
 ## Documentation
 
-- [参考手册](./docs/reference.zh.md) —— 命令、配置、恢复、兼容矩阵、排障、设计说明
-- [基准测试](./docs/benchmark.zh.md) —— 固定 fixture 的可复现数字与边界
-- [兼容性台账](./docs/compatibility.zh.md) —— 已验证宿主、声明范围、`verify-host`
+- [参考手册](./docs/reference.md) —— 命令、配置、恢复、兼容矩阵、排障、设计说明
 - [变更记录](./CHANGELOG.md) —— 每个版本改了什么
 
 ## Development
@@ -86,7 +94,7 @@ pnpm test
 pnpm build         # lib/index.js（宿主）+ lib/client.js（浏览器）
 ```
 
-更多脚本（`benchmark`、`release`、`check-manifest`、`check-docs`）见参考手册。
+更多脚本（`benchmark`、`release`、`check-manifest`、`check-docs`）见 `package.json` 的 `scripts`。
 
 ## Credits
 
