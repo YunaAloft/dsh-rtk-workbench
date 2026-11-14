@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/YunaAloft/dsh-rtk-workbench/blob/main/docs/reference.en.md
+    about: Behaviour matrix, configuration and troubleshooting.
+  - name: Reporting a problem
+    url: https://github.com/YunaAloft/dsh-rtk-workbench/blob/main/README.md#reporting-a-problem
+    about: What to collect before opening an issue.
