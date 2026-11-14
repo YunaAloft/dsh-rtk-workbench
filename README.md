@@ -55,10 +55,10 @@ dsh plugin --profile web add dsh-rtk-workbench
 
 ## Reporting a problem
 
-- 更新或重装插件后，先**完全退出并重新打开 DSH**（刷新页面也可以），再判断问题是否还在。
-- 提 issue 前准备好：`dsh --version`、插件版本与安装方式、系统与架构。
-- 运行 `/rtk doctor`，把输出贴进 issue；它不含命令原文与工具输出。
-- 用 [bug 表单](https://github.com/YunaAloft/dsh-rtk-workbench/issues/new?template=bug_report.yml) 提交，写明发生了什么、期望什么，有截图更好。
+- 更新或重装插件后，先**完全退出并重新打开 DSH**，看看问题是否还存在。
+- 提 bug issue 时请尽量提供：`dsh --version`、插件版本与安装方式、系统与架构等信息。
+- 建议运行 `/rtk doctor`，把输出贴进 issue；它不含命令原文与工具输出，可以放心提供。
+- 有 bug 时，建议用 [问题报告表单](https://github.com/YunaAloft/dsh-rtk-workbench/issues/new?template=bug_report.yml) 提交，写明发生了什么、期望什么，有截图更好。
 
 ## How it works
 

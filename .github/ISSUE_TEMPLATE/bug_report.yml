@@ -1,90 +1,76 @@
-name: Bug report
-description: The plugin misbehaves — pill, panel, compression or rewriting.
+name: 问题报告
+description: 插件出现问题：药丸、浮层、压缩或改写。
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        先**完全退出并重新打开 DSH**（不是最小化）再试一次：更新插件后旧样式可能仍留在页面里。
-        贴内容前请确认不含命令原文、工具输出或密钥。
+        安装或更新插件后，请**完全退出并重新打开 DSH**（不是最小化），让插件状态与样式完整刷新。
+        提交前请确认内容不含命令原文、工具输出或密钥。
 
   - type: input
     id: dsh-version
     attributes:
-      label: DSH version
-      description: "`dsh --version` 的输出"
-      placeholder: "0.2.2-rc.3"
+      label: DSH 版本（必填）
+      description: 运行 `dsh --version` 得到的输出
+      placeholder: 例如：0.2.2-rc.3
     validations:
       required: true
 
   - type: input
     id: plugin-version
     attributes:
-      label: Plugin version
-      description: 插件管理器里显示的版本，或 `npm ls dsh-rtk-workbench` 的结果
-      placeholder: "1.1.2"
+      label: 插件版本（必填）
+      description: 插件管理器里显示的版本号
+      placeholder: 例如：1.1.2
     validations:
       required: true
 
   - type: dropdown
     id: install
     attributes:
-      label: Install method
+      label: 安装方式（可选）
       options:
-        - npm
-        - GitHub Release tarball
-        - local build / tarball
-        - not sure
+        - npm 安装
+        - GitHub Release 包
+        - 本地打包
+        - 不确定
     validations:
       required: false
 
   - type: input
     id: platform
     attributes:
-      label: OS and architecture
-      placeholder: "macOS 14 arm64 / Windows 11 x64 / Ubuntu 24.04 arm64"
+      label: 操作系统与架构（必填）
+      placeholder: 例如：macOS 14 arm64 / Windows 11 x64 / Ubuntu 24.04 arm64
     validations:
       required: true
 
   - type: dropdown
     id: restart
     attributes:
-      label: Did a full restart change anything?
+      label: 完全退出并重启 DSH 后，问题还在吗？（必填）
       options:
-        - Still reproduces after a full restart
-        - Gone after a full restart
-        - Have not tried yet
+        - 仍然复现
+        - 重启后消失
+        - 还没试过
     validations:
       required: true
 
   - type: textarea
     id: what-happened
     attributes:
-      label: What happened, and what did you expect?
-      placeholder: "药丸显示成了巨大的黑色图标，但功能本身正常……"
+      label: 遇到了什么，期望是什么？（必填）
+      description: 描述现象与复现步骤；截图可以直接粘贴在输入框里。
+      placeholder: 例如：执行 git status 后输出没有变紧凑；已附截图。
     validations:
       required: true
 
   - type: textarea
-    id: steps
-    attributes:
-      label: Steps to reproduce (optional)
-    validations:
-      required: false
-
-  - type: input
-    id: screenshot
-    attributes:
-      label: Screenshot or recording URL (optional)
-      placeholder: "https://github.com/user-attachments/assets/…"
-    validations:
-      required: false
-
-  - type: textarea
     id: doctor
     attributes:
-      label: /rtk doctor output (optional, strongly recommended)
-      description: 不含命令原文与工具输出，可以放心贴
+      label: /rtk doctor 输出（可选，建议填写）
+      description: 运行 `/rtk doctor` 后把输出贴在这里；它不含命令原文与工具输出。
       render: text
     validations:
       required: false

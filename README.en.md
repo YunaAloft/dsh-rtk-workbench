@@ -55,10 +55,10 @@ Then work as usual: `git status` in a large repository becomes a compact listing
 
 ## Reporting a problem
 
-- After updating or reinstalling the plugin, **fully quit and reopen DSH** (a page refresh also works) before deciding the problem is still there.
-- Prepare `dsh --version`, the plugin version and install method, and your OS/architecture.
-- Run `/rtk doctor` and paste its output; it contains no command text or tool output.
-- Open a [bug report](https://github.com/YunaAloft/dsh-rtk-workbench/issues/new?template=bug_report.yml) with what happened, what you expected, and a screenshot if you have one.
+- After updating or reinstalling the plugin, **fully quit and reopen DSH** first and check whether the problem is still there.
+- When filing a bug, please include `dsh --version`, the plugin version and install method, and your OS/architecture.
+- Running `/rtk doctor` is recommended; paste its output into the issue — it contains no command text or tool output, so it is safe to share.
+- For bugs, please use the [bug report form](https://github.com/YunaAloft/dsh-rtk-workbench/issues/new?template=bug_report.yml) and describe what happened, what you expected, and attach a screenshot if possible.
 
 ## How it works
 
