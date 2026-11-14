@@ -30,6 +30,7 @@ function payload(overrides: Record<string, unknown> = {}): unknown {
       savedTokens: 12_400,
       ms: 1400,
       ratio: 0.81,
+      rewrites: 3,
       skipped: { size: 9, scope: 4, marked: 0, payload: 0, ptc: 3 },
       errors: { rtk: 0, timeout: 0 },
       byTool: [{ name: 'bash', calls: 12, inBytes: 100_000, outBytes: 19_000, savedTokens: 12_400 }],
@@ -135,8 +136,15 @@ describe('pillVisible', () => {
 describe('pillText', () => {
   it('names the unit, because a bare number reads like usage', () => {
     const text = pillText(readStatus(payload()), undefined, translate('zh'))
-    expect(text.primary).toBe('省 12.4k token · ↓81%')
+    expect(text.primary).toBe('省 12.4k tok · ↓81%')
     expect(text.secondary).toContain('12 次压缩')
+    expect(text.secondary).toContain('3 次改写')
+  })
+
+  it('splits the saved headline so narrow screens can drop the tail', () => {
+    const text = pillText(readStatus(payload()), undefined, translate('zh'))
+    expect(text.split).toEqual({ saved: '省 12.4k tok', separator: '·', reduction: '↓81%' })
+    expect(pillText(readStatus(payload({ session: null })), undefined, translate('zh')).split).toBeUndefined()
   })
 
   it('states the direction with an arrow instead of a minus sign', () => {
@@ -168,7 +176,7 @@ describe('pillText', () => {
 
   it('shows loading instead of the previous session numbers after a switch', () => {
     const view = readStatus(payload())
-    expect(pillText(view, undefined, translate('zh'), 's1').primary).toBe('省 12.4k token · ↓81%')
+    expect(pillText(view, undefined, translate('zh'), 's1').primary).toBe('省 12.4k tok · ↓81%')
     expect(pillText(view, undefined, translate('zh'), 's2').primary).toBe('rtk 读取中')
     expect(pillText(view, undefined, translate('zh'), 's2').primary).not.toContain('12.4k')
   })
@@ -186,9 +194,10 @@ describe('panelSections', () => {
     const titles = sections.map((section) => section.title)
     expect(titles).toEqual(['健康', '本会话', '累计（跨重启）', '按工具', '最近事件'])
     const session = sections[1]
-    expect(session?.rows[0]?.value).toBe('≈12.4k token')
+    expect(session?.rows[0]?.value).toBe('≈12.4k tok')
     expect(session?.rows[1]?.value).toContain('降幅 81%')
     expect(session?.rows[1]?.value).not.toContain('-81')
+    expect(session?.rows[2]?.value).toContain('3 次改写')
     expect(session?.note).toContain('size 9')
     expect(sections[3]?.rows[0]?.label).toBe('bash')
     expect(sections[4]?.rows[0]?.value).toContain('↓90%')

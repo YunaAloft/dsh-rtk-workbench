@@ -208,14 +208,22 @@ async function copyDiagnostics(): Promise<void> {
 }
 
 const CSS = `
-.rtkw-pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);border-radius:999px;padding:2px 10px;font-size:12px;line-height:18px;cursor:pointer;max-width:340px}
+.rtkw-pill{display:inline-flex;align-items:center;gap:6px;border:none;background:transparent;color:var(--dsw-alias-label-tertiary);border-radius:var(--dsw-radius-sm);padding:1px 8px;font-size:12px;line-height:18px;cursor:pointer;min-width:0;max-width:min(340px,100%);overflow:hidden}
 .rtkw-pill:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .rtkw-pill:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
-.rtkw-dot{width:6px;height:6px;border-radius:50%;background:var(--dsw-alias-state-success-primary)}
+.rtkw-pill:not([data-split]){flex-shrink:0}
+.rtkw-icon{width:14px;height:14px;flex:none;color:var(--dsw-alias-label-tertiary);fill:currentColor}
+.rtkw-dot{width:6px;height:6px;flex:none;border-radius:50%;background:var(--dsw-alias-state-success-primary)}
 .rtkw-warn .rtkw-dot{background:var(--dsw-alias-state-warn-primary)}
 .rtkw-off .rtkw-dot{background:var(--dsw-alias-state-idle-primary)}
-.rtkw-primary{white-space:nowrap;font-variant-numeric:tabular-nums}
-.rtkw-secondary{color:var(--dsw-alias-label-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rtkw-primary{display:inline-flex;align-items:center;min-width:0;overflow:hidden;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary)}
+.rtkw-saved{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.rtkw-sep{flex:none;color:var(--dsw-alias-label-tertiary)}
+.rtkw-pct{flex:none}
+.rtkw-secondary{color:var(--dsw-alias-label-tertiary);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:767px){.rtkw-secondary{display:none}}
+@media (max-width:480px){.rtkw-sep,.rtkw-pct{display:none}}
+@media (max-width:360px){.rtkw-pill[data-split] .rtkw-primary{display:none}}
 .rtkw-overlay{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-end;justify-content:center;background:var(--dsw-alias-bg-mask-1);padding:24px}
 .rtkw-panel{width:min(640px,100%);max-height:min(70vh,720px);overflow:auto;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);border:1px solid var(--dsw-alias-border-l2);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.18);padding:16px;font-size:13px}
 .rtkw-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
@@ -292,6 +300,7 @@ function createClientPlugin(require: (id: string) => unknown): {
     if (!pillVisible(view, snapshot.error)) return null
     const tone = toneOf(view, snapshot.error)
     const text = pillText(view, snapshot.error, t, snapshot.currentSessionKey)
+    const split = text.split
     return h(
       'button',
       {
@@ -300,11 +309,27 @@ function createClientPlugin(require: (id: string) => unknown): {
         title: text.secondary,
         'aria-haspopup': 'dialog',
         'aria-expanded': snapshot.open ? 'true' : 'false',
+        ...(split === undefined ? {} : { 'data-split': 'true' }),
         onClick: () => patch({ open: true }),
       },
       ...element([
+        h(
+          'svg',
+          { className: 'rtkw-icon', viewBox: '0 0 16 16', 'aria-hidden': true },
+          h('rect', { x: 2, y: 3, width: 12, height: 2, rx: 1 }),
+          h('rect', { x: 2, y: 7, width: 8, height: 2, rx: 1 }),
+          h('rect', { x: 2, y: 11, width: 12, height: 2, rx: 1 }),
+        ),
         h('span', { className: 'rtkw-dot', 'aria-hidden': true }),
-        h('span', { className: 'rtkw-primary' }, text.primary),
+        split === undefined
+          ? h('span', { className: 'rtkw-primary' }, text.primary)
+          : h(
+              'span',
+              { className: 'rtkw-primary' },
+              h('span', { className: 'rtkw-saved' }, split.saved),
+              h('span', { className: 'rtkw-sep' }, ` ${split.separator} `),
+              h('span', { className: 'rtkw-pct' }, split.reduction),
+            ),
         text.secondary === '' ? null : h('span', { className: 'rtkw-secondary' }, text.secondary),
       ]),
     )

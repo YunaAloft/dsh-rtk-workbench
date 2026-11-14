@@ -43,6 +43,8 @@ export interface SessionView {
   readonly savedTokens: number
   readonly ms: number
   readonly ratio: number
+  /** Applied rewrites for this session (persisted across restarts). */
+  readonly rewrites: number
   readonly skipped: Readonly<Record<string, number>>
   readonly byTool: readonly ToolRow[]
   readonly recent: readonly EventRow[]
@@ -143,6 +145,7 @@ function sessionOf(value: unknown): SessionView | null {
     savedTokens: num(raw.savedTokens),
     ms: num(raw.ms),
     ratio: num(raw.ratio),
+    rewrites: num(raw.rewrites),
     skipped,
     byTool,
     recent,
@@ -286,6 +289,12 @@ export function sessionMatches(view: StatusView, currentSessionKey: string | und
 export interface PillText {
   readonly primary: string
   readonly secondary: string
+  /** 保存态的拆段：窄屏只保留第一段（saved），其余整段隐藏。 */
+  readonly split?: {
+    readonly saved: string
+    readonly separator: string
+    readonly reduction: string
+  }
 }
 
 /**
@@ -321,11 +330,14 @@ export function pillText(
   const session = view.session
   const secondary = t('pill.detail', {
     calls: session.compressions,
-    rewrites: view.rewrites.calls,
+    rewrites: session.rewrites,
   })
+  const saved = t('pill.saved', { tokens: formatTokens(session.savedTokens) })
+  const reductionText = reduction(session.ratio)
   return {
-    primary: `${t('pill.saved', { tokens: formatTokens(session.savedTokens) })} · ${reduction(session.ratio)}`,
+    primary: `${saved} · ${reductionText}`,
     secondary,
+    split: { saved, separator: '·', reduction: reductionText },
   }
 }
 
@@ -425,7 +437,7 @@ export function panelSections(
       session === null || session.compressions === 0
         ? [{ label: t('panel.none'), value: '' }]
         : [
-            { label: t('panel.savedTokens'), value: `≈${formatTokens(session.savedTokens)} token` },
+            { label: t('panel.savedTokens'), value: `≈${formatTokens(session.savedTokens)} tok` },
             {
               label: t('panel.savedBytes'),
               value: `${formatBytes(session.inBytes)} → ${formatBytes(session.outBytes)} · ${t('panel.reduction')} ${String(percentOf(session.ratio))}%`,
@@ -434,7 +446,7 @@ export function panelSections(
               label: t('panel.calls'),
               value: t('panel.callsValue', {
                 compressions: session.compressions,
-                rewrites: view.rewrites.calls,
+                rewrites: session.rewrites,
                 seconds: (session.ms / 1000).toFixed(1),
               }),
             },
@@ -455,7 +467,7 @@ export function panelSections(
       ? view.lifetime === null || view.lifetime.compressions === 0
         ? [{ label: t('panel.nothingYet'), value: '' }]
         : [
-            { label: t('panel.savedTokens'), value: `≈${formatTokens(view.lifetime.savedTokens)} token` },
+            { label: t('panel.savedTokens'), value: `≈${formatTokens(view.lifetime.savedTokens)} tok` },
             {
               label: t('panel.calls'),
               value: t('panel.lifetimeValue', {
@@ -474,7 +486,7 @@ export function panelSections(
         ? [{ label: t('panel.none'), value: '' }]
         : session.byTool.slice(0, 8).map((row) => ({
             label: row.name,
-            value: `${row.calls}× · ≈${formatTokens(row.savedTokens)} token · ${formatBytes(row.inBytes)} → ${formatBytes(row.outBytes)}`,
+            value: `${row.calls}× · ≈${formatTokens(row.savedTokens)} tok · ${formatBytes(row.inBytes)} → ${formatBytes(row.outBytes)}`,
           })),
   }
 

@@ -20,7 +20,7 @@ const zh = {
   'pill.degraded': 'rtk 降级',
   'pill.ready': 'rtk 待命',
   'pill.readyDetail': '还没有可压缩的输出',
-  'pill.saved': '省 {tokens} token',
+  'pill.saved': '省 {tokens} tok',
   'pill.detail': '{calls} 次压缩 · {rewrites} 次改写',
   'panel.health': '健康',
   'panel.title': 'rtk 工作台',
@@ -63,7 +63,7 @@ const zh = {
   'panel.sessionMatch': '与当前会话一致',
   'panel.sessionMismatch': '快照 {shown} ≠ 当前 {current}，正在刷新',
   'panel.sessionLoading': '切换会话后正在读取…',
-  'panel.footnote': 'token 为估算（ASCII ÷4，汉字 ×0.6）；百分比按字节计算',
+  'panel.footnote': 'tok 为估算（ASCII ÷4，汉字 ×0.6）；百分比按字节计算',
 }
 
 const en: Record<keyof typeof zh, string> = {
@@ -75,7 +75,7 @@ const en: Record<keyof typeof zh, string> = {
   'pill.degraded': 'rtk degraded',
   'pill.ready': 'rtk ready',
   'pill.readyDetail': 'nothing compressible yet',
-  'pill.saved': 'saved {tokens} token',
+  'pill.saved': 'saved {tokens} tok',
   'pill.detail': '{calls} compressions · {rewrites} rewrites',
   'panel.health': 'health',
   'panel.title': 'rtk workbench',
@@ -118,7 +118,7 @@ const en: Record<keyof typeof zh, string> = {
   'panel.sessionMatch': 'matches the current session',
   'panel.sessionMismatch': 'showing {shown} ≠ current {current}, refreshing',
   'panel.sessionLoading': 'reading the new session…',
-  'panel.footnote': 'tokens are estimated (ASCII / 4, CJK x 0.6); percentages use bytes',
+  'panel.footnote': 'tok values are estimated (ASCII / 4, CJK x 0.6); percentages use bytes',
 }
 
 /** Dictionaries handed to `ctx.locale.register`. */
