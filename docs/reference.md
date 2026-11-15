@@ -1,6 +1,8 @@
-# dsh-rtk-workbench 参考手册（1.2.0）
+# dsh-rtk-workbench 参考手册
 
-适用：DSH `0.2.2-rc.3`（运行期验证；兼容线 `0.2.x`，`dshTarget` 随 1.2.0 更新）、rtk `1.2.0`、Node `^22.19.0 || >=24`。安装后需要重启 `dsh web`（bundle 变更不是刷新页面）。
+> 本文对应 main 开发线（1.2.0 开发中）；已发布版本以 npm / GitHub tag 为准。
+
+适用：DSH `0.2.2-rc.3`（`dshTarget`；兼容线 `0.2.x`）、rtk `1.2.0`、Node `^22.19.0 || >=24`。安装后需要重启 `dsh web`（bundle 变更不是刷新页面）。
 
 ## 1. 安装与验证
 
@@ -112,13 +114,12 @@ lifetime   : 2 831 compressions, ~1.2M tok saved since 2026-11-05
 | DeepSeek Harness | `0.2.2-rc.3`（目标；`package.json` 的 `dshTarget`；运行期同版验证） |
 | rtk | `1.2.0`（内置；`dshRtkVersion`） |
 | Node | `^22.19.0 || >=24` |
-| 插件 | `1.2.0` |
 
 **已验证宿主。** 每次发布前新增或刷新一行；证据来自该提交上的门禁与实机冒烟。
 
 | 宿主 | rtk | 验证日期 | 证据 | 说明 |
 |---|---|---|---|---|
-| `0.2.2-rc.3` | `1.2.0` | 2026-11-15 | typecheck + 250 用例 + build + manifest/docs/preview + `verify-host`；rc.3/rc.5 双基线；npm 主包与 Windows fat tarball `smoke-pack` | 1.2.0 本地候选（未发布） |
+| `0.2.2-rc.3` | `1.2.0` | 2026-11-15 | typecheck + 256 用例 + build + manifest/docs/preview + `verify-host`；rc.3/rc.5 双基线；npm 主包与 Windows fat tarball `smoke-pack` | 1.2.0 开发中（未发布） |
 | `0.2.2-rc.3` | `1.2.0` | 2026-11-14 | typecheck + 235 用例 + build + manifest/docs + `verify-host`；Windows x64 与 Linux arm64（dsh-go）实机验收 | 1.1.2 |
 | `0.2.2-rc.1` | `1.2.0` | 2026-11-13 | typecheck + 225 用例 + build + manifest/docs + `verify-host`；web profile 验收 | 1.1.1 |
 | `0.2.2-rc.1` | `1.2.0` | 2026-11-12 | typecheck + 220 用例；`build-vendor` 5 平台 + checksums；基准复跑 | 1.1.0 |

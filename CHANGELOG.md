@@ -2,9 +2,9 @@
 
 All notable changes to `dsh-rtk-workbench`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
-## [1.2.0] — 2026-11-15
+## [Unreleased]
 
-Makes the overlay explain itself, gives the plugin page a real preview image, and stops counting an rtk no-op as a compression. This release also fixes the stale-stylesheet bug from #17 and avoids a false "unusable" flash on a slow first probe.
+Makes the overlay explain itself, gives the plugin page a real preview image, and stops counting an rtk no-op as a compression. This update also fixes the stale-stylesheet bug from #17 and avoids a false "unusable" flash on a slow first probe.
 
 ### Added
 
@@ -17,11 +17,12 @@ Makes the overlay explain itself, gives the plugin page a real preview image, an
 
 - Status/session copy now uses `RTK` for the product and `rtk` for commands and binaries. The unreachable status route and the failed binary probe get distinct first lines: `RTK 状态不可达` / `RTK unreachable` versus `RTK 不可用` / `RTK unusable`.
 - The diagnostics action is now `复制状态 JSON` / `Copy status JSON`, with a usage hint below it and a visible `复制失败` / `Copy failed` state when the clipboard rejects the write.
-- Skip reasons are displayed with labels and counts (`太小 10 次 · 文件/搜索 6 次 · 试压不划算 4 次`; `too small 10× …`) while the JSON and `/rtk stats` keep the raw keys. The session block explains a zero saving when rewrites happened but compression had nothing left to do.
+- Skip reasons are displayed with labels and counts (`太小 10 次 · 文件/搜索 6 次 · 试压不划算 4 次`; `too small 10× …`) while the JSON and `/rtk stats` keep the raw keys. The session block explains a zero saving when rewrites happened but compression had nothing left to do. The feedback block also shows the full current session id with a copy action for bug reports.
 - The pill separator matches the host's readings: 6px on each side and `separator-primary`. The `/rtk` ghost hint is now the short `help · status · on/off <switch>`.
 
 ### Fixed
 
+- A session with no stats record no longer renders as `nothing yet` with the health row claiming it matches the current session. The overlay now distinguishes a missing session (`no rtk record for this session yet`) from a record with zero compressions, and explains that the lifetime total covers all sessions (#19).
 - An in-place plugin update refreshed the new JavaScript but kept the old `<style>` element, leaving new markup with stale CSS: the icon rendered at its intrinsic 300×150 and the pill lost its frame. The client now replaces the existing stylesheet's contents instead of returning early (#17).
 - An rtk invocation that returned nothing useful no longer increments `compressions` while leaving `in == out` and `savedTokens == 0`. Only a real `ok` result is counted; a normal `noop` is recorded under `skipped`, and spawn/timeout/exit/payload/parse failures are recorded under `errors`.
 - A cold first probe no longer paints the pill yellow while a freshly installed Windows binary is still being scanned. The probe keeps a neutral initializing state, uses a 15-second budget and retries a timeout once; only the final failure is reported as `RTK 不可用`.
