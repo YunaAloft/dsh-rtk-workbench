@@ -8,9 +8,9 @@ Makes the overlay explain itself, gives the plugin page a real preview image, an
 
 ### Added
 
-- The overlay now has separate **Diagnostics** and **Feedback & export** blocks at the bottom, after health, this session, lifetime, by-tool rows and recent events. Diagnostics records when the self-check ran, starts collapsed, expands to the full text, and can be cleared or copied with a `Checked at …` first line; a running check shows `正在自检…` with a short hint, and the completed or failed result opens automatically. Feedback copies the status JSON, explains what it is for, and opens a self-contained "How to read this?" drawer covering the self-check, the status JSON, and common failures. The health block ends with a `诊断 ↓` link that scrolls to the diagnostics block.
+- The overlay now has separate **Diagnostics** and **Feedback & export** blocks at the bottom, after health, this session, lifetime, by-tool rows and recent events. Diagnostics records when the self-check ran, starts collapsed, expands to the full text, and can be cleared or copied with a `Checked at …` first line; a running check shows `正在自检…` with a short hint, and the completed or failed result opens automatically. Feedback copies the status JSON, explains what it is for, and opens a self-contained help drawer through the `点击此处可查看如何解读这些数据 →` button (reading the self-check, the status JSON, and common failures). The health block ends with a `查看诊断 ↓` button that scrolls to the diagnostics block.
 - The first capability probe is an initializing state: it gets a 15-second budget and one automatic retry after a timeout, showing a neutral `RTK 初始化中` instead of a false yellow `RTK 不可用`. Only a final failure turns the pill yellow; a successful retry goes straight to green.
-- The plugin detail page now shows a single feature preview per UI language. `locale/*.json` points `meta.detail` at `docs/DETAIL.md` / `docs/DETAIL.zh.md`, each referencing a 1280×520 (2× of 640×260) PNG. The README fallback, which dropped raw HTML images and showed Chinese text in the English UI, is no longer used for the detail page.
+- The plugin detail page now shows a single feature preview per UI language. `locale/*.json` points `meta.detail` at `docs/DETAIL.md` / `docs/DETAIL.zh.md`, each referencing a 1280×480 (2× of 640×240) PNG. The README fallback, which dropped raw HTML images and showed Chinese text in the English UI, is no longer used for the detail page.
 - A repository-owned `scripts/check-preview.mjs` runs in CI and verifies the PNG pair, both DETAIL documents, `meta.detail`, and `package.json#files`; `smoke-pack` verifies the four files in both tarball shapes and that the README banner is not shipped.
 
 ### Changed
@@ -110,7 +110,7 @@ The savings become visible: one token estimate everywhere, a cross-restart ledge
 - README defaults to Chinese (`README.en.md` keeps English) and was trimmed from 149 to 108 lines; the earlier per-case table moved into the benchmark document.
 - `dshTarget` is `0.2.2-rc.1`. The verified-host row was added to `docs/compatibility.md`.
 - Configuration keys and the `/rtk` command surface are frozen from this release: further keys are additive only.
-- **Distribution only, not in the package:** the GitHub release asset now also carries `docs/`, `CHANGELOG.md` and `README.en.md` (it previously shipped a README whose relative links pointed at files the tarball did not contain), and the packaging script fails loudly when a staged path disappears. The npm tarball already contained them, so no package content changed and no new version was cut.
+- **Distribution only, not in the package:** the GitHub release asset now also carries `docs/`, `CHANGELOG.md` and `README.en.md` (it previously shipped a README whose relative buttons pointed at files the tarball did not contain), and the packaging script fails loudly when a staged path disappears. The npm tarball already contained them, so no package content changed and no new version was cut.
 
 ## [0.2.0] — 2026-11-03
 
