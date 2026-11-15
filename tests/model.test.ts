@@ -299,7 +299,7 @@ describe('panelSections', () => {
     expect(keysRow?.value).toBe('本会话尚无快照 · 3a1eb7…561c')
     expect(keysRow?.tone).toBeUndefined()
     expect(sections[1]?.rows[0]?.label).toBe('本会话还没有 rtk 记录')
-    expect(sections[1]?.note).toContain('累计统计所有会话')
+    expect(sections[1]?.note).toContain('累计统计的是所有会话')
   })
 
   it('calls a zero-compression record empty, not missing', () => {
