@@ -71,6 +71,9 @@ export interface CommandContext {
   readonly webRoute?: () => { readonly mounted: boolean; readonly auth: 'authenticated' | 'fail-closed' }
 }
 
+/** Short ghost hint; subcommands must also appear in HELP (tested). */
+export const COMMAND_HINT = 'help · status · on/off <switch>'
+
 export const HELP = [
   'rtk-workbench — /rtk <subcommand>',
   '  status         binary, pipeline, switches, session savings',

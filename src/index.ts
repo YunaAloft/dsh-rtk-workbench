@@ -1,7 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { PostToolDecision, PreToolDecision, ToolExecution, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import { AWARENESS_ORDER, AWARENESS_SECTION_NAME, awarenessText, type SystemPromptLike } from './awareness'
-import { createCommandHandler, type CommandsLike } from './commands'
+import { COMMAND_HINT, createCommandHandler, type CommandsLike } from './commands'
 import { createCompressLayer } from './compress-layer'
 import { Config } from './config'
 import type { Config as ConfigShape } from './config'
@@ -571,7 +571,7 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
         definitionId: 'dsh-rtk-workbench',
         name: 'rtk',
         description: 'Inspect rtk, its switches and restore elided output.',
-        input: { hint: 'status | tools | gain | recall <hash> | on|off rewrite|compress' },
+        input: { hint: COMMAND_HINT },
         handler: (invocation) => commandHandler.handle(invocation),
       }),
     )

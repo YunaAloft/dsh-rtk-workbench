@@ -494,6 +494,17 @@ export function panelSections(
   }
 
   const session = view.session
+  const notes: string[] = []
+  if (session !== null && session.savedTokens === 0 && session.rewrites > 0) {
+    notes.push(t('panel.noteZeroSaved'))
+  }
+  if (session !== null && Object.values(session.skipped).some((count) => count > 0)) {
+    notes.push(
+      `${t('panel.skipped')}: ${skips(t, session)
+        .map((row) => `${row.label} ${row.value}`)
+        .join(' · ')}`,
+    )
+  }
   const sessionSection: PanelSection = {
     title: t('panel.session'),
     rows:
@@ -517,11 +528,7 @@ export function panelSections(
               ? [{ label: t('panel.guard'), value: String(view.rewrites.guards), tone: 'warn' as Tone }]
               : []),
           ],
-    ...(session !== null && Object.values(session.skipped).some((count) => count > 0)
-      ? { note: `${t('panel.skipped')}: ${skips(t, session)
-          .map((row) => `${row.label} ${row.value}`)
-          .join(' · ')}` }
-      : {}),
+    ...(notes.length > 0 ? { note: notes.join('\n') } : {}),
   }
 
   const lifetimeSection: PanelSection = {

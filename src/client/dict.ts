@@ -87,6 +87,7 @@ const zh = {
   'panel.sessionMatch': '与当前会话一致',
   'panel.sessionMismatch': '快照 {shown} ≠ 当前 {current}，正在刷新',
   'panel.sessionLoading': '切换会话后正在读取…',
+  'panel.noteZeroSaved': '省下 0 不代表 RTK 没工作：改写已经把输出变紧凑，压缩没有可再压的余地；改写省下的 token 不计入这里。',
   'panel.footnote': 'tok 为估算（ASCII ÷4，汉字 ×0.6）；百分比按字节计算',
 }
 
@@ -166,6 +167,7 @@ const en: Record<keyof typeof zh, string> = {
   'panel.sessionMatch': 'matches the current session',
   'panel.sessionMismatch': 'showing {shown} ≠ current {current}, refreshing',
   'panel.sessionLoading': 'reading the new session…',
+  'panel.noteZeroSaved': 'Saving 0 does not mean RTK is idle: rewrites already made the output compact, so there was nothing left to compress; tokens saved by rewrites are not counted here.',
   'panel.footnote': 'tok values are estimated (ASCII / 4, CJK x 0.6); percentages use bytes',
 }
 

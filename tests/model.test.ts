@@ -239,6 +239,21 @@ describe('panelSections', () => {
     expect(sections[1]?.rows[0]?.label).toBe('nothing yet')
   })
 
+  it('explains a zero saving only when rewrites did work', () => {
+    const base = (payload() as { session: Record<string, unknown> }).session
+    const zero = {
+      ...base,
+      compressions: 0,
+      savedTokens: 0,
+      rewrites: 3,
+      skipped: { size: 0, scope: 0, marked: 0, payload: 0, ptc: 0, noop: 0 },
+    }
+    const note = panelSections(readStatus(payload({ session: zero })), undefined, translate('zh'))[1]?.note
+    expect(note).toContain('省下 0 不代表 RTK 没工作')
+    const noRewrite = { ...zero, rewrites: 0 }
+    expect(panelSections(readStatus(payload({ session: noRewrite })), undefined, translate('zh'))[1]?.note).toBeUndefined()
+  })
+
   it('masks the stale session and explains the mismatch in the health rows', () => {
     const stale = {
       session: {

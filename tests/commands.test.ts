@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createCommandHandler } from '../src/commands'
+import { COMMAND_HINT, createCommandHandler, HELP } from '../src/commands'
 import type { Config } from '../src/config'
 
 /** Minimal Config with the documented defaults. */
@@ -185,6 +185,11 @@ describe('/rtk command handler', () => {
     })
     const rejectedText = rejectedOutcome.kind === 'success' ? (rejectedOutcome.text ?? '') : ''
     expect(rejectedText).toContain('guard: reject — tokens-dropped')
+  })
+
+  it('keeps the ghost hint to subcommands the help text documents', () => {
+    expect(COMMAND_HINT).toBe('help · status · on/off <switch>')
+    for (const subcommand of ['help', 'status', 'on|off']) expect(HELP).toContain(subcommand)
   })
 
   it('reports the web route exposure in doctor', async () => {

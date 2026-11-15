@@ -343,7 +343,7 @@ function createClientPlugin(require: (id: string) => unknown): {
               'span',
               { className: 'rtkw-primary' },
               h('span', { className: 'rtkw-saved' }, split.saved),
-              h('span', { className: 'rtkw-sep' }, ` ${split.separator} `),
+              h('span', { className: 'rtkw-sep' }, split.separator),
               h('span', { className: 'rtkw-pct' }, split.reduction),
             ),
         text.secondary === '' ? null : h('span', { className: 'rtkw-secondary' }, text.secondary),

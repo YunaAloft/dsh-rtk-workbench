@@ -17,7 +17,7 @@ const CSS = `
 .rtkw-off .rtkw-dot{background:var(--dsw-alias-state-idle-primary)}
 .rtkw-primary{display:inline-flex;align-items:center;min-width:0;overflow:hidden;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary)}
 .rtkw-saved{min-width:0;overflow:hidden;text-overflow:ellipsis}
-.rtkw-sep{flex:none;color:var(--dsw-alias-label-tertiary)}
+.rtkw-sep{flex:none;margin:0 6px;color:var(--dsw-alias-separator-primary)}
 .rtkw-pct{flex:none}
 .rtkw-secondary{color:var(--dsw-alias-label-tertiary);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media (max-width:767px){.rtkw-secondary{display:none}}
@@ -36,7 +36,7 @@ const CSS = `
 .rtkw-row dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-primary)}
 .rtkw-row dd.rtkw-warn{color:var(--dsw-alias-state-warn-primary)}
 .rtkw-row dd.rtkw-ok{color:var(--dsw-alias-state-success-primary)}
-.rtkw-note{margin:6px 0 0;color:var(--dsw-alias-label-tertiary);font-size:12px}
+.rtkw-note{margin:6px 0 0;color:var(--dsw-alias-label-tertiary);font-size:12px;white-space:pre-line}
 .rtkw-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px}
 .rtkw-link{border:none;background:transparent;color:var(--dsw-alias-label-secondary);font-size:12px;padding:6px 0;cursor:pointer;text-align:left}
 .rtkw-link:hover{color:var(--dsw-alias-label-primary);text-decoration:underline}
