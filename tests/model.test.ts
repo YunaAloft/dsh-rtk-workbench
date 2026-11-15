@@ -29,7 +29,7 @@ function payload(overrides: Record<string, unknown> = {}): unknown {
     ok: true,
     updatedAt: '2026-11-05T00:00:00.000Z',
     binary: { source: 'bundled', version: 'rtk 1.1.0' },
-    probe: { state: 'ok', detail: 'rtk 1.1.0 (probe 120 ms)' },
+    probe: { state: 'ok', detail: 'rtk 1.1.0 (probe 120 ms)', probing: false },
     pipeline: { mode: 'plugin-owned', health: 'ok' },
     switches: { rewrite: true, compress: true, awareness: true, guard: 'enforce', deny: false, ui: true },
     rewrites: { calls: 3, fallbacks: 0, guards: 1, learned: [] },
@@ -168,6 +168,12 @@ describe('pillText', () => {
     expect(reduction(-1)).toBe('↓0%')
   })
 
+  it('stays neutral and says initializing while the first probe runs', () => {
+    const view = readStatus(payload({ probe: { state: 'unknown', detail: 'probing…', probing: true } }))
+    expect(toneOf(view, undefined)).toBe('off')
+    expect(pillText(view, undefined, translate('zh')).primary).toBe('RTK 初始化中')
+  })
+
   it('says ready before anything was compressed', () => {
     const view = readStatus(payload({ session: null }))
     expect(pillText(view, undefined, translate('en')).primary).toBe('RTK ready')
@@ -209,9 +215,9 @@ describe('panelSections', () => {
     expect(session?.rows[1]?.value).toContain('降幅 81%')
     expect(session?.rows[1]?.value).not.toContain('-81')
     expect(session?.rows[2]?.value).toContain('3 次改写')
-    expect(session?.note).toContain('太小 9')
-    expect(session?.note).toContain('被动工具 3')
-    expect(session?.note).toContain('试压不划算 2')
+    expect(session?.note).toContain('太小 9 次')
+    expect(session?.note).toContain('被动工具 3 次')
+    expect(session?.note).toContain('试压不划算 2 次')
     expect(sections[3]?.rows[0]?.label).toBe('bash')
     expect(sections[4]?.rows[0]?.value).toContain('↓90%')
   })

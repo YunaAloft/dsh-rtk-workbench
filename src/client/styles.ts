@@ -39,6 +39,8 @@ const CSS = `
 .rtkw-note{margin:6px 0 0;color:var(--dsw-alias-label-tertiary);font-size:12px;white-space:pre-line}
 .rtkw-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px}
 .rtkw-link{border:none;background:transparent;color:var(--dsw-alias-label-secondary);font-size:12px;padding:6px 0;cursor:pointer;text-align:left}
+.rtkw-shortcut{border:none;background:transparent;color:var(--dsw-alias-label-tertiary);font-size:11px;padding:6px 0 0;cursor:pointer;text-align:left}
+.rtkw-shortcut:hover{color:var(--dsw-alias-label-secondary);text-decoration:underline}
 .rtkw-link:hover{color:var(--dsw-alias-label-primary);text-decoration:underline}
 .rtkw-help{max-width:560px}
 .rtkw-help .rtkw-note{color:var(--dsw-alias-label-secondary);line-height:1.55}

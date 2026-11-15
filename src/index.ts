@@ -60,6 +60,13 @@ interface Capability {
 /** How long a failed probe is trusted before a background re-probe. */
 const RECHECK_AFTER_MS = 60_000
 
+/** Generous first-probe budget: a freshly installed binary can wait on an AV scan. */
+const PROBE_TIMEOUT_MS = 15_000
+
+/** One retry after a timeout; a hard spawn failure is reported immediately. */
+const PROBE_RETRY_DELAY_MS = 2_000
+const PROBE_ATTEMPTS = 2
+
 /**
  * Run `use` once a service is available, now or later.
  *
@@ -253,40 +260,58 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
   function probeInBackground(): void {
     if (capability.probing) return
     capability.probing = true
-    const budget = Math.max(config.timeoutMs, config.coldStartTimeoutMs)
+    // A first probe is a neutral "initializing" state; a re-probe after a
+    // recorded failure keeps the warning visible until it actually recovers.
+    if (capability.state !== 'fail') {
+      capability.state = 'unknown'
+      capability.detail = 'probing…'
+    }
+    const budget = Math.max(config.timeoutMs, config.coldStartTimeoutMs, PROBE_TIMEOUT_MS)
     const started = Date.now()
-    void runRtk(binary, ['--version'], { timeoutMs: budget, env })
-      .then(async (run) => {
-        if (run.failure !== undefined || run.code !== 0) {
-          capability.state = 'fail'
-          capability.detail = describeRun(run)
-          const cold = run.failure?.kind === 'timeout' ? ' — the first spawn in a fresh host can be slow' : ''
-          logger.warn?.(
-            `[rtk-workbench] rtk is not usable at "${binary}" (${capability.detail})${cold}; rewrites and compression stay off`,
+    void (async () => {
+      try {
+        for (let attempt = 1; attempt <= PROBE_ATTEMPTS; attempt += 1) {
+          const run = await runRtk(binary, ['--version'], { timeoutMs: budget, env })
+          const timedOut = run.failure?.kind === 'timeout'
+          if (run.failure !== undefined || run.code !== 0) {
+            if (timedOut && attempt < PROBE_ATTEMPTS) {
+              capability.detail = `probe attempt ${String(attempt)} timed out; retrying…`
+              logger.info?.(`[rtk-workbench] ${capability.detail}`)
+              await new Promise<void>((resolve) => setTimeout(resolve, PROBE_RETRY_DELAY_MS))
+              continue
+            }
+            capability.state = 'fail'
+            capability.detail = timedOut
+              ? `timeout: no answer within ${String(Math.round(budget / 1000))} s`
+              : describeRun(run)
+            const cold = timedOut ? ' — the first spawn in a fresh host can be slow' : ''
+            logger.warn?.(
+              `[rtk-workbench] rtk is not usable at "${binary}" (${capability.detail})${cold}; rewrites and compression stay off`,
+            )
+            return
+          }
+          capability.state = 'ok'
+          capability.version = (run.stdout || run.stderr).trim()
+          capability.detail = `${capability.version} (probe ${String(Date.now() - started)} ms)`
+          logger.info?.(
+            `[rtk-workbench] ${capability.detail} via ${resolution.source} — rewrite ${String(config.rewriteEnabled)}, compress ${String(config.compressEnabled)}`,
           )
+          // A broken recall store does not stop compression, but it silently removes
+          // the recovery path: rtk then omits its `[full output: rtk recall …]` hint,
+          // so elided text is gone for good. Say so once, with the usual cause.
+          if (config.compressEnabled) await probeRecall()
+          await settlePipeline()
+          registerAwareness()
           return
         }
-        capability.state = 'ok'
-        capability.version = (run.stdout || run.stderr).trim()
-        capability.detail = `${capability.version} (probe ${String(Date.now() - started)} ms)`
-        logger.info?.(
-          `[rtk-workbench] ${capability.detail} via ${resolution.source} — rewrite ${String(config.rewriteEnabled)}, compress ${String(config.compressEnabled)}`,
-        )
-        // A broken recall store does not stop compression, but it silently removes
-        // the recovery path: rtk then omits its `[full output: rtk recall …]` hint,
-        // so elided text is gone for good. Say so once, with the usual cause.
-        if (config.compressEnabled) await probeRecall()
-        await settlePipeline()
-        registerAwareness()
-      })
-      .catch(() => {
+      } catch (error) {
         capability.state = 'fail'
-        capability.detail = 'probe threw'
-      })
-      .finally(() => {
+        capability.detail = error instanceof Error ? error.message : 'probe threw'
+      } finally {
         capability.probing = false
         capability.probedAt = Date.now()
-      })
+      }
+    })()
   }
 
 
@@ -529,7 +554,7 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
   mountStatusRoute(ctx as Context & InjectingContext, {
     sources: {
       binary: () => ({ source: resolution.source, version: capability.version }),
-      probe: () => ({ state: capability.state, detail: capability.detail }),
+      probe: () => ({ state: capability.state, detail: capability.detail, probing: capability.probing }),
       pipeline: () => ({
         mode: pipeline.mode,
         health: pipeline.health,

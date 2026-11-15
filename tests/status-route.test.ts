@@ -40,7 +40,7 @@ function request(url: string, method = 'GET'): never {
 function sources(overrides: Partial<StatusSources> = {}): StatusSources {
   return {
     binary: () => ({ source: 'bundled', version: 'rtk 1.1.0' }),
-    probe: () => ({ state: 'ok', detail: 'probe ok' }),
+    probe: () => ({ state: 'ok', detail: 'probe ok', probing: false }),
     pipeline: () => ({ mode: 'plugin-owned', health: 'ok' }),
     switches: () => ({ rewrite: true, compress: true, awareness: true, guard: 'enforce', deny: false, ui: true }),
     rewrites: () => ({ calls: 2, fallbacks: 0, guards: 1, learned: [] }),
@@ -67,6 +67,7 @@ describe('buildStatusPayload', () => {
     expect(payload.ok).toBe(true)
     expect(payload.updatedAt).toBe(new Date(1_760_000_000_000).toISOString())
     expect(payload.binary.source).toBe('bundled')
+    expect(payload.probe.probing).toBe(false)
     expect(payload.session).toBeNull()
     expect(payload.lifetime).toBeNull()
     expect(payload.patched).toEqual(['bash'])

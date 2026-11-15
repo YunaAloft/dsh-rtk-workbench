@@ -66,7 +66,7 @@ export interface LifetimeView {
 export interface StatusView {
   readonly updatedAt: string
   readonly binary: { readonly source: string; readonly version: string }
-  readonly probe: { readonly state: string; readonly detail: string }
+  readonly probe: { readonly state: string; readonly detail: string; readonly probing: boolean }
   readonly pipeline: { readonly mode: string; readonly health: string; readonly detail?: string }
   readonly switches: {
     readonly rewrite: boolean
@@ -184,7 +184,7 @@ export function readStatus(input: unknown): StatusView | undefined {
   return {
     updatedAt: str(raw.updatedAt),
     binary: { source: str(binary.source, 'unknown'), version: str(binary.version) },
-    probe: { state: str(probe.state, 'unknown'), detail: str(probe.detail) },
+    probe: { state: str(probe.state, 'unknown'), detail: str(probe.detail), probing: bool(probe.probing) },
     pipeline: {
       mode: str(pipeline.mode),
       health: str(pipeline.health, 'unknown'),
@@ -226,6 +226,8 @@ export function toneOf(view: StatusView | undefined, error: string | undefined):
   // document exists, a failed refresh warns that the visible numbers are stale.
   if (view === undefined) return 'off'
   if (error !== undefined) return 'warn'
+  // The first probe (or its retry) is still running: neutral, not a failure.
+  if (view.probe.probing && view.probe.state !== 'fail') return 'off'
   if (view.probe.state === 'fail') return 'warn'
   // Compression is where the savings come from; with it off the pill must not
   // keep showing a healthy green dot over a frozen number.
@@ -366,6 +368,9 @@ export function pillText(
   }
   if (view === undefined) return { primary: t('pill.loading'), secondary: '' }
   if (!sessionMatches(view, currentSessionKey)) return { primary: t('pill.loading'), secondary: '' }
+  if (view.probe.probing && view.probe.state !== 'fail') {
+    return { primary: t('pill.initializing'), secondary: t('pill.initializingDetail') }
+  }
   if (view.probe.state === 'fail') return { primary: t('pill.unavailable'), secondary: view.probe.detail }
   if (!view.switches.compress) return { primary: t('pill.compressOff'), secondary: '' }
   if (view.pipeline.health === 'problems') {
@@ -454,8 +459,15 @@ export function panelSections(
     { label: t('panel.binary'), value: `${view.binary.source}${view.binary.version === '' ? '' : ` · ${view.binary.version}`}` },
     {
       label: t('panel.probe'),
-      value: view.probe.state === 'ok' ? t('panel.ok') : view.probe.state === 'fail' ? t('panel.failed') : t('panel.unknown'),
-      tone: view.probe.state === 'fail' ? 'warn' : 'ok',
+      value:
+        view.probe.probing && view.probe.state !== 'fail'
+          ? t('panel.initializing')
+          : view.probe.state === 'ok'
+            ? t('panel.ok')
+            : view.probe.state === 'fail'
+              ? t('panel.failed')
+              : t('panel.unknown'),
+      tone: view.probe.state === 'fail' ? 'warn' : view.probe.probing ? undefined : 'ok',
     },
     {
       label: t('panel.pipeline'),
@@ -501,7 +513,7 @@ export function panelSections(
   if (session !== null && Object.values(session.skipped).some((count) => count > 0)) {
     notes.push(
       `${t('panel.skipped')}: ${skips(t, session)
-        .map((row) => `${row.label} ${row.value}`)
+        .map((row) => t('panel.skippedCount', { label: row.label, count: row.value }))
         .join(' · ')}`,
     )
   }

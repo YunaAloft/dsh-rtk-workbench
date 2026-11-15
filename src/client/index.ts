@@ -211,8 +211,8 @@ async function runDoctor(): Promise<void> {
       doctor: text,
       doctorAt: Date.now(),
       doctorFailed: typeof body.text !== 'string',
-      // A fresh result starts collapsed; the user expands it when needed.
-      doctorOpen: false,
+      // The user explicitly asked for this run: show the result immediately.
+      doctorOpen: true,
       doctorCopied: false,
       doctorCopyFailed: false,
     })
@@ -221,7 +221,8 @@ async function runDoctor(): Promise<void> {
       doctor: error instanceof Error ? error.message : translate('panel.doctorFailed'),
       doctorAt: Date.now(),
       doctorFailed: true,
-      doctorOpen: false,
+      // A failure needs to be visible too; silence here looks like a no-op.
+      doctorOpen: true,
       doctorCopied: false,
       doctorCopyFailed: false,
     })
@@ -380,14 +381,24 @@ function createClientPlugin(require: (id: string) => unknown): {
     if (!snapshot.open) return null
 
     const sections = panelSections(snapshot.view, snapshot.error, t, snapshot.currentSessionKey)
-    const sectionNode = (section: (typeof sections)[number]): unknown =>
+    const scrollToDiagnostics = (): void => {
+      document.getElementById('rtkw-diagnostics')?.scrollIntoView({ block: 'start' })
+    }
+    const sectionNode = (section: (typeof sections)[number], index: number): unknown =>
       h(
         'section',
         { className: 'rtkw-section', key: section.title },
         ...element([
           h('h4', null, section.title),
-          section.rows.length === 0 ? null : h('dl', null, ...section.rows.map((entry, index) => row(t, entry, index))),
+          section.rows.length === 0 ? null : h('dl', null, ...section.rows.map((entry, rowIndex) => row(t, entry, rowIndex))),
           section.note === undefined ? null : h('p', { className: 'rtkw-note' }, section.note),
+          index === 0
+            ? h(
+                'button',
+                { type: 'button', className: 'rtkw-shortcut', onClick: scrollToDiagnostics },
+                t('panel.diagnosticsShortcut'),
+              )
+            : null,
         ]),
       )
 
@@ -400,11 +411,12 @@ function createClientPlugin(require: (id: string) => unknown): {
           type: 'button',
           className: 'rtkw-action',
           disabled: snapshot.busy,
+          'aria-busy': snapshot.busy ? 'true' : 'false',
           onClick: () => {
             void runDoctor()
           },
         },
-        t('panel.doctor'),
+        snapshot.busy ? t('panel.doctorRunning') : t('panel.doctor'),
       ),
       h(
         'button',
@@ -436,7 +448,7 @@ function createClientPlugin(require: (id: string) => unknown): {
 
     const diagnostics = h(
       'section',
-      { className: 'rtkw-section', key: 'diagnostics' },
+      { className: 'rtkw-section', key: 'diagnostics', id: 'rtkw-diagnostics' },
       ...element([
         h('h4', null, t('panel.sectionDiagnostics')),
         snapshot.doctor === undefined || snapshot.doctorAt === undefined
@@ -452,6 +464,9 @@ function createClientPlugin(require: (id: string) => unknown): {
               `${snapshot.doctorOpen ? '▾' : '▸'} ${doctorCollapsedLabel(t, snapshot.doctorAt, snapshot.doctorFailed)}`,
             ),
         doctorActions,
+        snapshot.busy
+          ? h('p', { className: 'rtkw-hint', role: 'status' }, t('panel.doctorRunningHint'))
+          : null,
         snapshot.doctor === undefined || !snapshot.doctorOpen
           ? null
           : h('pre', { className: 'rtkw-doctor' }, snapshot.doctor),
@@ -542,10 +557,10 @@ function createClientPlugin(require: (id: string) => unknown): {
         )
       : null
 
-    // Keep the first two sections (health, session) visible above the fold;
-    // diagnostics and feedback follow them, and the long history stays below.
-    const lead = sections.slice(0, 2).map(sectionNode)
-    const tail = sections.slice(2).map(sectionNode)
+    // Numbers first and together: health, session, lifetime, by-tool and recent
+    // events. Diagnostics and export are utilities at the bottom; the health
+    // section carries a shortcut that scrolls down to them.
+    const sectionNodes = sections.map((section, index) => sectionNode(section, index))
     return h(
       'div',
       {
@@ -574,10 +589,9 @@ function createClientPlugin(require: (id: string) => unknown): {
               '✕',
             ),
           ),
-          ...lead,
+          ...sectionNodes,
           diagnostics,
           feedback,
-          ...tail,
           h('p', { className: 'rtkw-fine' }, t('panel.footnote')),
         ]),
       ),
