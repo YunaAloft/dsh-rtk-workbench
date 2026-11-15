@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 // Repository-owned guard for the plugin detail preview and its wiring.
 //
-// The shipped pair is 1280×520 PNG on purpose: the official preview spec asks
+// The shipped pair is 1280×480 PNG on purpose: the official preview spec asks
 // for a 640×300 SVG with text converted to paths, but Chromium rasterizes such
 // paths at 1x without hinting, so 1px stems split into pale columns and look
-// broken. A 1280×520 PNG (2x of 640×260) is downscaled to 640 CSS px by the
+// broken. A 1280×480 PNG (2x of 640×240) is downscaled to 640 CSS px by the
 // detail page, which behaves like supersampling and stays crisp without
 // depending on fonts.
 //
 // This guard covers the whole hand-off, not just the bytes:
-// - both PNGs are real 1280×520 images, differ, and the pair is at most 1 MiB;
+// - both PNGs are real 1280×480 images, differ, and the pair is at most 1 MiB;
 // - each DETAIL document is exactly one image line pointing at its variant;
 // - locale/{en,zh}.json declare those DETAIL documents via meta.detail;
 // - package.json#files ships the four files and does not pull in docs/readme
@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url'
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 const WIDTH = 1280
-const HEIGHT = 520
+const HEIGHT = 480
 const MAX_PAIR_BYTES = 1024 * 1024
 
 const root = resolve(process.argv[2] ?? join(dirname(fileURLToPath(import.meta.url)), '..'))
@@ -55,7 +55,7 @@ for (const [language, file] of Object.entries(images)) {
   if (size !== undefined) {
     check(
       size.width === WIDTH && size.height === HEIGHT,
-      `${language}: ${file} is ${WIDTH}×${HEIGHT} (2× the 640×260 layout); got ${size.width}×${size.height}`,
+      `${language}: ${file} is ${WIDTH}×${HEIGHT} (2× the 640×240 layout); got ${size.width}×${size.height}`,
     )
   }
   check(statSync(file).size <= MAX_PAIR_BYTES, `${language}: ${file} is at most 1 MiB by itself`)
