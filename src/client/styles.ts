@@ -38,7 +38,7 @@ const CSS = `
 .rtkw-row dd.rtkw-ok{color:var(--dsw-alias-state-success-primary)}
 .rtkw-note{margin:6px 0 0;color:var(--dsw-alias-label-tertiary);font-size:12px;white-space:pre-line}
 .rtkw-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px}
-.rtkw-link{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;margin-top:8px;padding:6px 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);font-size:12px;cursor:pointer;text-align:left}
+.rtkw-link{display:inline-flex;align-items:center;justify-content:flex-start;gap:6px;max-width:100%;margin-top:8px;padding:6px 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);font-size:12px;cursor:pointer;text-align:left}
 .rtkw-link:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .rtkw-shortcut{display:inline-flex;align-items:center;gap:4px;margin-top:8px;padding:3px 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);font-size:11px;cursor:pointer;text-align:left}
 .rtkw-shortcut:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
