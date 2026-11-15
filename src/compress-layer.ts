@@ -180,7 +180,9 @@ export function createCompressLayer(options: CompressLayerOptions) {
             `compress ${exec.name}: ${String(text.length)} -> ${String(compressed.text.length)} B in ${String(elapsed)} ms`,
           )
         } else if (outcome.kind === 'noop') {
-          options.onSkipped?.(exec, 'noop')
+          // A cancelled call is a no-op result but not a skipped result; it
+          // must not show up as "no gain" in the session counters.
+          if (exec.signal?.aborted !== true) options.onSkipped?.(exec, 'noop')
           options.log?.(`compress ${exec.name}: no gain in ${String(elapsed)} ms`)
         } else {
           options.onFailed?.(exec, outcome.reason)

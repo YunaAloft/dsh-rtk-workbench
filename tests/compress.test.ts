@@ -254,6 +254,17 @@ describe('compression notes and spill', () => {
     expect(compressed).not.toHaveBeenCalled()
     expect(failed).not.toHaveBeenCalled()
     expect(skipped).toHaveBeenCalledWith(expect.anything(), 'noop')
+
+    const aborted = new AbortController()
+    aborted.abort()
+    const skippedAbort = vi.fn()
+    const abortedLayer = makeLayer(baseConfig(), { compress: fakeNoop(), onSkipped: skippedAbort })
+    await runOnce(
+      abortedLayer,
+      { name: 'bash', arguments: { command: 'cargo test' }, signal: aborted.signal },
+      'x'.repeat(4096),
+    )
+    expect(skippedAbort).not.toHaveBeenCalled()
   })
 
   it('reports a failed round trip separately from a skip', async () => {
