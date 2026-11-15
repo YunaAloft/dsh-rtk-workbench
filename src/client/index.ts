@@ -15,6 +15,7 @@
 
 import { dictionaries, NS } from './dict'
 import {
+  doctorCollapsedLabel,
   panelSections,
   pillText,
   pillVisible,
@@ -59,6 +60,12 @@ interface Snapshot {
   error: string | undefined
   open: boolean
   doctor: string | undefined
+  /** Completion time of the last self-check, epoch ms. */
+  doctorAt: number | undefined
+  /** Whether the self-check request itself failed (not whether a line says fail). */
+  doctorFailed: boolean
+  /** Whether the self-check body is expanded inside the overlay. */
+  doctorOpen: boolean
   busy: boolean
   copied: boolean
   /** Session the pill currently renders for (from the slot's `inject`). */
@@ -70,6 +77,9 @@ const store: Snapshot = {
   error: undefined,
   open: false,
   doctor: undefined,
+  doctorAt: undefined,
+  doctorFailed: false,
+  doctorOpen: false,
   busy: false,
   copied: false,
   currentSessionKey: undefined,
@@ -185,12 +195,29 @@ async function runDoctor(): Promise<void> {
     const response = await fetch(doctorUrl(), { method: 'POST', headers: { accept: 'application/json' } })
     if (!response.ok) throw new Error(`HTTP ${String(response.status)}`)
     const body = (await response.json()) as { text?: unknown }
-    patch({ doctor: typeof body.text === 'string' ? body.text : translate('panel.doctorFailed') })
+    const text = typeof body.text === 'string' ? body.text : translate('panel.doctorFailed')
+    patch({
+      doctor: text,
+      doctorAt: Date.now(),
+      doctorFailed: typeof body.text !== 'string',
+      // A fresh result starts collapsed; the user expands it when needed.
+      doctorOpen: false,
+    })
   } catch (error) {
-    patch({ doctor: error instanceof Error ? error.message : translate('panel.doctorFailed') })
+    patch({
+      doctor: error instanceof Error ? error.message : translate('panel.doctorFailed'),
+      doctorAt: Date.now(),
+      doctorFailed: true,
+      doctorOpen: false,
+    })
   } finally {
     patch({ busy: false })
   }
+}
+
+/** Drop the last self-check result without touching the status snapshot. */
+function clearDoctor(): void {
+  patch({ doctor: undefined, doctorAt: undefined, doctorFailed: false, doctorOpen: false })
 }
 
 /** Copy the last status document for a bug report. */
@@ -242,6 +269,8 @@ const CSS = `
 .rtkw-action:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .rtkw-action:disabled{opacity:.6;cursor:default}
 .rtkw-fine{flex:1 1 100%;margin:6px 0 0;color:var(--dsw-alias-label-caption);font-size:11px}
+.rtkw-doctor-toggle{display:block;width:100%;border:none;background:transparent;color:var(--dsw-alias-label-tertiary);font-size:12px;text-align:left;padding:6px 0 0;cursor:pointer;font-variant-numeric:tabular-nums}
+.rtkw-doctor-toggle:hover{color:var(--dsw-alias-label-secondary)}
 .rtkw-doctor{margin:8px 0 0;padding:8px;border-radius:8px;background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-secondary);font-size:11px;white-space:pre-wrap;max-height:200px;overflow:auto}
 `
 
@@ -320,7 +349,7 @@ function createClientPlugin(require: (id: string) => unknown): {
         'aria-haspopup': 'dialog',
         'aria-expanded': snapshot.open ? 'true' : 'false',
         ...(split === undefined ? {} : { 'data-split': 'true' }),
-        onClick: () => patch({ open: true }),
+        onClick: () => patch({ open: true, doctorOpen: false }),
       },
       ...element([
         h(
@@ -360,7 +389,7 @@ function createClientPlugin(require: (id: string) => unknown): {
     React.useEffect(() => {
       if (!snapshot.open) return
       const onKey = (event: KeyboardEvent): void => {
-        if (event.key === 'Escape') patch({ open: false })
+        if (event.key === 'Escape') patch({ open: false, doctorOpen: false })
       }
       document.addEventListener('keydown', onKey)
       return () => document.removeEventListener('keydown', onKey)
@@ -373,7 +402,7 @@ function createClientPlugin(require: (id: string) => unknown): {
         className: 'rtkw-overlay',
         role: 'presentation',
         onClick: (event: { target: unknown; currentTarget: unknown }) => {
-          if (event.target === event.currentTarget) patch({ open: false })
+          if (event.target === event.currentTarget) patch({ open: false, doctorOpen: false })
         },
       },
       h(
@@ -386,7 +415,12 @@ function createClientPlugin(require: (id: string) => unknown): {
             h('strong', null, t('panel.title')),
             h(
               'button',
-              { type: 'button', className: 'rtkw-close', 'aria-label': t('panel.close'), onClick: () => patch({ open: false }) },
+              {
+                type: 'button',
+                className: 'rtkw-close',
+                'aria-label': t('panel.close'),
+                onClick: () => patch({ open: false, doctorOpen: false }),
+              },
               '✕',
             ),
           ),
@@ -401,7 +435,21 @@ function createClientPlugin(require: (id: string) => unknown): {
               ]),
             ),
           ),
-          snapshot.doctor === undefined ? null : h('pre', { className: 'rtkw-doctor' }, snapshot.doctor),
+          snapshot.doctor === undefined || snapshot.doctorAt === undefined
+            ? null
+            : h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'rtkw-doctor-toggle',
+                  'aria-expanded': snapshot.doctorOpen ? 'true' : 'false',
+                  onClick: () => patch({ doctorOpen: !snapshot.doctorOpen }),
+                },
+                `${snapshot.doctorOpen ? '▾' : '▸'} ${doctorCollapsedLabel(t, snapshot.doctorAt, snapshot.doctorFailed)}`,
+              ),
+          snapshot.doctor === undefined || !snapshot.doctorOpen
+            ? null
+            : h('pre', { className: 'rtkw-doctor' }, snapshot.doctor),
           h(
             'footer',
             { className: 'rtkw-foot' },
@@ -416,6 +464,16 @@ function createClientPlugin(require: (id: string) => unknown): {
                 },
               },
               t('panel.doctor'),
+            ),
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'rtkw-action',
+                disabled: snapshot.doctor === undefined,
+                onClick: clearDoctor,
+              },
+              t('panel.clearDoctor'),
             ),
             h(
               'button',

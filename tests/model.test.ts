@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { panelSections, pillText, pillVisible, readStatus, reduction, sessionMatches, toneOf, type Translate } from '../src/client/model'
+import {
+  doctorCollapsedLabel,
+  doctorStamp,
+  panelSections,
+  pillText,
+  pillVisible,
+  readStatus,
+  reduction,
+  sessionMatches,
+  toneOf,
+  type Translate,
+} from '../src/client/model'
 import { dictionaries } from '../src/client/dict'
 
 /** A translator over the real dictionaries, so tests see what users read. */
@@ -260,5 +271,24 @@ describe('panelSections', () => {
     const keysRow = sections[0]?.rows.find((row) => row.label === '快照会话')
     expect(keysRow?.value).toBe('与当前会话一致')
     expect(sections.map((section) => section.title)).toContain('本会话')
+  })
+})
+
+describe('self-check timestamps', () => {
+  const at = new Date(2026, 10, 15, 12, 34, 56).getTime()
+  const sameDay = new Date(2026, 10, 15, 18, 0, 0).getTime()
+  const nextDay = new Date(2026, 10, 16, 9, 0, 0).getTime()
+
+  it('shows the clock for a check from today', () => {
+    expect(doctorStamp(translate('zh'), at, sameDay)).toBe('自检于 12:34:56')
+  })
+
+  it('adds the date when the check is from another day', () => {
+    expect(doctorStamp(translate('zh'), at, nextDay)).toBe('自检于 11-15 12:34:56')
+  })
+
+  it('marks a failed self-check request in the collapsed row', () => {
+    expect(doctorCollapsedLabel(translate('zh'), at, false, sameDay)).toBe('上次自检 · 12:34:56')
+    expect(doctorCollapsedLabel(translate('zh'), at, true, sameDay)).toBe('上次自检失败 · 12:34:56')
   })
 })

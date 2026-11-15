@@ -252,6 +252,53 @@ export function reduction(ratio: number): string {
   return `↓${String(percentOf(ratio))}%`
 }
 
+/** Two-digit clock/date component. */
+function two(value: number): string {
+  return String(value).padStart(2, '0')
+}
+
+/** Local time of a self-check; the date appears only when it is not today. */
+function doctorTime(at: number, now: number): string {
+  const date = new Date(at)
+  const current = new Date(now)
+  const clock = `${two(date.getHours())}:${two(date.getMinutes())}:${two(date.getSeconds())}`
+  const sameDay =
+    date.getFullYear() === current.getFullYear() &&
+    date.getMonth() === current.getMonth() &&
+    date.getDate() === current.getDate()
+  return sameDay ? clock : `${two(date.getMonth() + 1)}-${two(date.getDate())} ${clock}`
+}
+
+/**
+ * Timestamp line above an expanded self-check.
+ *
+ * @param t - translator.
+ * @param at - self-check completion time, epoch ms.
+ * @param now - clock used to decide whether the date is needed; injectable for tests.
+ */
+export function doctorStamp(t: Translate, at: number, now = Date.now()): string {
+  return t('panel.doctorAt', { time: doctorTime(at, now) })
+}
+
+/**
+ * Label of the collapsed self-check row.
+ *
+ * @param t - translator.
+ * @param at - self-check completion time, epoch ms.
+ * @param failed - whether the request itself failed.
+ * @param now - clock used to decide whether the date is needed; injectable for tests.
+ */
+export function doctorCollapsedLabel(
+  t: Translate,
+  at: number,
+  failed: boolean,
+  now = Date.now(),
+): string {
+  return t(failed ? 'panel.doctorCollapsedFailed' : 'panel.doctorCollapsed', {
+    time: doctorTime(at, now),
+  })
+}
+
 /**
  * Whether the pill should be on screen at all.
  *
