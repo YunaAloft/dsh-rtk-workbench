@@ -68,6 +68,7 @@ interface Snapshot {
   doctorOpen: boolean
   busy: boolean
   copied: boolean
+  copyFailed: boolean
   /** Session the pill currently renders for (from the slot's `inject`). */
   currentSessionKey: string | undefined
 }
@@ -82,6 +83,7 @@ const store: Snapshot = {
   doctorOpen: false,
   busy: false,
   copied: false,
+  copyFailed: false,
   currentSessionKey: undefined,
 }
 const listeners = new Set<() => void>()
@@ -221,16 +223,19 @@ function clearDoctor(): void {
 }
 
 /** Copy the last status document for a bug report. */
-async function copyDiagnostics(): Promise<void> {
+async function copyStatus(): Promise<void> {
   try {
     const text = JSON.stringify(store.view ?? { error: store.error ?? 'no data' }, null, 2)
     await navigator.clipboard.writeText(text)
-    patch({ copied: true })
+    patch({ copied: true, copyFailed: false })
     setTimeout(() => {
       patch({ copied: false })
     }, 1500)
   } catch {
-    patch({ copied: false })
+    patch({ copied: false, copyFailed: true })
+    setTimeout(() => {
+      patch({ copyFailed: false })
+    }, 1500)
   }
 }
 
@@ -268,6 +273,7 @@ const CSS = `
 .rtkw-action{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer}
 .rtkw-action:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .rtkw-action:disabled{opacity:.6;cursor:default}
+.rtkw-hint{flex:1 1 100%;margin:4px 0 0;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:1.45}
 .rtkw-fine{flex:1 1 100%;margin:6px 0 0;color:var(--dsw-alias-label-caption);font-size:11px}
 .rtkw-doctor-toggle{display:block;width:100%;border:none;background:transparent;color:var(--dsw-alias-label-tertiary);font-size:12px;text-align:left;padding:6px 0 0;cursor:pointer;font-variant-numeric:tabular-nums}
 .rtkw-doctor-toggle:hover{color:var(--dsw-alias-label-secondary)}
@@ -481,11 +487,16 @@ function createClientPlugin(require: (id: string) => unknown): {
                 type: 'button',
                 className: 'rtkw-action',
                 onClick: () => {
-                  void copyDiagnostics()
+                  void copyStatus()
                 },
               },
-              snapshot.copied ? t('panel.copied') : t('panel.copy'),
+              snapshot.copied
+                ? t('panel.copied')
+                : snapshot.copyFailed
+                  ? t('panel.copyFailed')
+                  : t('panel.copy'),
             ),
+            h('p', { className: 'rtkw-hint' }, t('panel.copyHint')),
             h('p', { className: 'rtkw-fine' }, t('panel.footnote')),
           ),
         ]),
