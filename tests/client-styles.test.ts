@@ -37,7 +37,7 @@ describe('injectStyles', () => {
     const document = documentStub(null)
     vi.stubGlobal('document', document)
     vi.resetModules()
-    const { injectStyles } = await import('../src/client/index')
+    const { injectStyles } = await import('../src/client/styles')
     injectStyles()
     expect(document.appended).toHaveLength(1)
     expect(document.appended[0]?.id).toBe('rtk-workbench-styles')
@@ -49,7 +49,7 @@ describe('injectStyles', () => {
     const document = documentStub(existing)
     vi.stubGlobal('document', document)
     vi.resetModules()
-    const { injectStyles } = await import('../src/client/index')
+    const { injectStyles } = await import('../src/client/styles')
     injectStyles()
     // The point of issue #17: new JS + old CSS produced a 300x150 black icon.
     expect(existing.textContent).not.toBe('old CSS')
