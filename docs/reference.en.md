@@ -1,4 +1,4 @@
-# dsh-rtk-workbench reference (1.1.2)
+# dsh-rtk-workbench reference (1.2.0)
 
 Applies to DSH `0.2.2-rc.3` (runtime-verified; the `0.2.x` line is compatible and `dshTarget` moves to rc.3 with 1.2.0), rtk `1.2.0`, Node `^22.19.0 || >=24`. Restart `dsh web` after installing — a bundle change is not a page refresh.
 
@@ -109,15 +109,16 @@ Every key can be overridden from `cordis.patch.yml`; values are validated at loa
 
 | Component | Version |
 |---|---|
-| DeepSeek Harness | `0.2.2-rc.1` (target; `dshTarget` in `package.json`; the runtime was verified on `0.2.2-rc.3`) |
+| DeepSeek Harness | `0.2.2-rc.3` (target; `dshTarget` in `package.json`; the same release was used at runtime) |
 | rtk | `1.2.0` (bundled; `dshRtkVersion`) |
 | Node | `^22.19.0 || >=24` |
-| Plugin | `1.1.2` |
+| Plugin | `1.2.0` |
 
 **Verified hosts.** One row is added or refreshed before every release; the evidence is that commit's gates plus a runtime smoke.
 
 | Host | rtk | Checked | Evidence | Notes |
 |---|---|---|---|---|
+| `0.2.2-rc.3` | `1.2.0` | 2026-11-15 | typecheck + 249 tests + build + manifest/docs/preview + `verify-host`; rc.3/rc.5 dual baseline; npm main and Windows fat tarball `smoke-pack` | 1.2.0 local candidate (not released) |
 | `0.2.2-rc.3` | `1.2.0` | 2026-11-14 | typecheck + 235 tests + build + manifest/docs + `verify-host`; Windows x64 and Linux arm64 (dsh-go) acceptance | 1.1.2 |
 | `0.2.2-rc.1` | `1.2.0` | 2026-11-13 | typecheck + 225 tests + build + manifest/docs + `verify-host`; web profile acceptance | 1.1.1 |
 | `0.2.2-rc.1` | `1.2.0` | 2026-11-12 | typecheck + 220 tests; `build-vendor` on 5 platforms + checksums; benchmark re-run | 1.1.0 |
