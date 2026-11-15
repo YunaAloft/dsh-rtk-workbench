@@ -247,11 +247,21 @@ const CSS = `
 
 let stylesInjected = false
 
-/** Inject the stylesheet once; component-local styles would flicker on remount. */
-function injectStyles(): void {
+/**
+ * Inject the stylesheet once, or refresh the stylesheet an earlier bundle left
+ * behind. A hot update keeps the page alive: the new module runs with fresh
+ * code but the old `<style>` element is still in the document. Returning early
+ * there used to leave the new markup paired with stale CSS (issue #17).
+ *
+ * Exported for the regression test; the bundle entry still registers the plugin
+ * for its side effect only.
+ */
+export function injectStyles(): void {
   if (stylesInjected || typeof document === 'undefined') return
   const id = 'rtk-workbench-styles'
-  if (document.getElementById(id) !== null) {
+  const existing = document.getElementById(id)
+  if (existing !== null) {
+    existing.textContent = CSS
     stylesInjected = true
     return
   }

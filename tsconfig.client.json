@@ -13,5 +13,5 @@
     "moduleDetection": "force",
     "noEmit": true
   },
-  "include": ["src/client", "src/tokens.ts", "src/format.ts"]
+  "include": ["src/client", "src/tokens.ts", "src/format.ts", "tests/client-styles.test.ts"]
 }
