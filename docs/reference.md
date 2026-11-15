@@ -34,7 +34,7 @@ dsh plugin --profile <profile> add dsh-rtk-workbench
 
 输入 `/rtk ` 时宿主的幽灵提示只列短语法 `help · status · on/off <switch>`；完整子命令见上表或 `/rtk help`。
 
-**界面药丸与浮层。** Web GUI 里插件在输入框下方的 composer dock 行里渲染一个药丸（与宿主的 activity/usage 同一排）——`省 12.4k tok · ↓81%`——旁边是压缩与改写次数，守卫计数只在拒绝过之后出现。外观与宿主底栏一致：无边框、无底色，主文案用 `label-secondary`，明细用 `label-tertiary`；分隔符 `·` 两侧各留 6px、颜色用 `separator-primary`，与官方读数一致。药丸开头是一个 14px 图标加状态圆点；空间不足时药丸可被压缩，窄屏按三档收敛：≤767px 隐藏「N 次压缩 · M 次改写」，≤480px 只留「省 X tok」，≤360px 有省量时主文案收起，只留图标与圆点（待命/不可用/已关等状态词保留）。三种颜色：正常、警示（`RTK 不可用` 或注入的 pipeline 回退）、灰色（压缩已关，或状态路由始终没有应答）。点开是浮层：先显示健康、本会话，随后是「诊断」与「反馈与导出」两块。诊断区默认折叠为「上次自检 · 时间」（请求失败为「上次自检失败 · 时间」；跨天带日期），点开看全文；按钮为「运行自检 / 清除 / 复制自检文本」，复制文本首行是 `自检于 …`。反馈区是「复制状态 JSON」、用途说明，以及「如何解读这些数据？」抽屉（自检怎么读 / 状态 JSON 是什么 / 常见失败与下一步；Esc 或点遮罩关闭）；累计、按工具、最近三条事件排在下方。「本会话」底部的跳过原因用中文标签显示（太小 / 文件搜索 / 已带压缩标记 / 载荷过大 / 被动工具 / 试压不划算），JSON 与 `/rtk stats` 仍用原始 key。药丸在拿到第一份状态之前不显示，但首次请求失败时会显示灰色 `RTK 状态不可达` 药丸，浮层里带错误信息——这样 fail-closed 的路由是可见的，不会看起来像插件没加载。可用 `uiPill: false` 或 `/rtk off ui` 关掉；后者会写回 profile 配置，重启后仍保持关闭。
+**界面药丸与浮层。** Web GUI 里插件在输入框下方的 composer dock 行里渲染一个药丸（与宿主的 activity/usage 同一排）——`省 12.4k tok · ↓81%`——旁边是压缩与改写次数，守卫计数只在拒绝过之后出现。外观与宿主底栏一致：无边框、无底色，主文案用 `label-secondary`，明细用 `label-tertiary`；分隔符 `·` 两侧各留 6px、颜色用 `separator-primary`，与官方读数一致。药丸开头是一个 14px 图标加状态圆点；空间不足时药丸可被压缩，窄屏按三档收敛：≤767px 隐藏「N 次压缩 · M 次改写」，≤480px 只留「省 X tok」，≤360px 有省量时主文案收起，只留图标与圆点（待命/不可用/已关等状态词保留）。三种颜色：正常、警示（`RTK 不可用` 或注入的 pipeline 回退）、灰色（首次探测初始化、压缩已关，或状态路由始终没有应答）；首次探测较慢时显示 `RTK 初始化中`，重试成功后再转绿。点开是浮层，顺序为「健康 → 本会话 → 累计（跨重启）→ 按工具 → 最近事件 → 诊断 → 反馈与导出」；「健康」区末尾有「诊断 ↓」链接，点击滚动到诊断区。诊断区默认折叠为「上次自检 · 时间」（请求失败为「上次自检失败 · 时间」；跨天带日期），点开看全文；运行中按钮显示「正在自检…」并提示通常需要几秒，本次成功或失败后自动展开，关闭浮层再开则默认折叠；按钮为「运行自检 / 清除 / 复制自检文本」，复制文本首行是 `自检于 …`。反馈区是「复制状态 JSON」、用途说明，以及「如何解读这些数据？」抽屉（自检怎么读 / 状态 JSON 是什么 / 常见失败与下一步；Esc 或点遮罩关闭）。「本会话」底部的跳过原因用中文标签加次数显示（太小 10 次 / 文件搜索 6 次 / 已带压缩标记 / 载荷过大 / 被动工具 / 试压不划算），JSON 与 `/rtk stats` 仍用原始 key。药丸在拿到第一份状态之前不显示，但首次请求失败时会显示灰色 `RTK 状态不可达` 药丸，浮层里带错误信息——这样 fail-closed 的路由是可见的，不会看起来像插件没加载。可用 `uiPill: false` 或 `/rtk off ui` 关掉；后者会写回 profile 配置，重启后仍保持关闭。
 
 **统计持久化。** 累计与会话统计都写入 `<DSH_HOME>/rtk-workbench/stats.json`（格式 v2）：会话按最后一次活动保留最近 512 个、超过 60 天自动清理；只记计数、工具名与时间，不记命令原文或输出。宿主重启后，同一个会话的药丸会恢复到重启前的压缩与改写数字并继续累加；`statsPersist: off` 时两者都不落盘。
 
@@ -58,7 +58,7 @@ lifetime   : 2 831 compressions, ~1.2M tok saved since 2026-11-05
 | `rtkPath` | `''` | 显式二进制路径；空 = `RTK_BIN`/`DSH_RTK_BIN`/内置/PATH |
 | `rtkSource` | `auto` | `auto` 优先内置；`path` 只走 PATH |
 | `timeoutMs` | `2000` | 稳态单次调用预算；超时 = 不改写/不压缩 |
-| `coldStartTimeoutMs` | `8000` | 首次调用预算；平台扫描未签名二进制时 2.7–5.8 s 很常见 |
+| `coldStartTimeoutMs` | `8000` | 首次调用预算；平台扫描未签名二进制时 2.7–5.8 s 很常见。后台首次探测单独使用至少 15 s 预算，超时自动重试一次 |
 | `rewriteEnabled` | `true` | 改写总开关 |
 | `rewriteFallback` | `retry` | rtk 自身失败时是否重放原命令（只认 rtk 的失败签名） |
 | `rewriteSandboxGuard` | `auto` | Windows 受限沙箱下跳过改写（见 `help sandbox`）；`off` 强制 |
@@ -118,7 +118,7 @@ lifetime   : 2 831 compressions, ~1.2M tok saved since 2026-11-05
 
 | 宿主 | rtk | 验证日期 | 证据 | 说明 |
 |---|---|---|---|---|
-| `0.2.2-rc.3` | `1.2.0` | 2026-11-15 | typecheck + 249 用例 + build + manifest/docs/preview + `verify-host`；rc.3/rc.5 双基线；npm 主包与 Windows fat tarball `smoke-pack` | 1.2.0 本地候选（未发布） |
+| `0.2.2-rc.3` | `1.2.0` | 2026-11-15 | typecheck + 250 用例 + build + manifest/docs/preview + `verify-host`；rc.3/rc.5 双基线；npm 主包与 Windows fat tarball `smoke-pack` | 1.2.0 本地候选（未发布） |
 | `0.2.2-rc.3` | `1.2.0` | 2026-11-14 | typecheck + 235 用例 + build + manifest/docs + `verify-host`；Windows x64 与 Linux arm64（dsh-go）实机验收 | 1.1.2 |
 | `0.2.2-rc.1` | `1.2.0` | 2026-11-13 | typecheck + 225 用例 + build + manifest/docs + `verify-host`；web profile 验收 | 1.1.1 |
 | `0.2.2-rc.1` | `1.2.0` | 2026-11-12 | typecheck + 220 用例；`build-vendor` 5 平台 + checksums；基准复跑 | 1.1.0 |
