@@ -170,31 +170,31 @@ describe('pillText', () => {
 
   it('says ready before anything was compressed', () => {
     const view = readStatus(payload({ session: null }))
-    expect(pillText(view, undefined, translate('en')).primary).toBe('rtk ready')
+    expect(pillText(view, undefined, translate('en')).primary).toBe('RTK ready')
   })
 
   it('explains a degraded state instead of showing numbers', () => {
     const view = readStatus(payload({ pipeline: { mode: 'plugin-owned', health: 'problems', detail: 'validate failed' } }))
     const text = pillText(view, undefined, translate('en'))
-    expect(text.primary).toBe('rtk degraded')
+    expect(text.primary).toBe('RTK degraded')
     expect(text.secondary).toBe('validate failed')
   })
 
   it('reports a failed probe', () => {
     const view = readStatus(payload({ probe: { state: 'fail', detail: 'enoent' } }))
-    expect(pillText(view, undefined, translate('en')).primary).toBe('rtk unusable')
+    expect(pillText(view, undefined, translate('en')).primary).toBe('RTK unusable')
   })
 
   it('shows loading instead of the previous session numbers after a switch', () => {
     const view = readStatus(payload())
     expect(pillText(view, undefined, translate('zh'), 's1').primary).toBe('省 12.4k tok · ↓81%')
-    expect(pillText(view, undefined, translate('zh'), 's2').primary).toBe('rtk 读取中')
+    expect(pillText(view, undefined, translate('zh'), 's2').primary).toBe('RTK 读取中')
     expect(pillText(view, undefined, translate('zh'), 's2').primary).not.toContain('12.4k')
   })
 
   it('names the failed status route before the first document', () => {
     const text = pillText(undefined, 'HTTP 401', translate('zh'))
-    expect(text.primary).toBe('rtk 不可用')
+    expect(text.primary).toBe('RTK 状态不可达')
     expect(text.secondary).toBe('状态接口 HTTP 401')
   })
 })
