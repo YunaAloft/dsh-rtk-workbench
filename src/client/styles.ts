@@ -49,6 +49,8 @@ const CSS = `
 .rtkw-action:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .rtkw-action:disabled{opacity:.6;cursor:default}
 .rtkw-hint{flex:1 1 100%;margin:4px 0 0;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:1.45}
+.rtkw-session{flex:1 1 100%;margin:6px 0 0;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:1.45;overflow-wrap:anywhere}
+.rtkw-session code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--dsw-alias-label-secondary)}
 .rtkw-fine{flex:1 1 100%;margin:6px 0 0;color:var(--dsw-alias-label-caption);font-size:11px}
 .rtkw-doctor-toggle{display:block;width:100%;border:none;background:transparent;color:var(--dsw-alias-label-tertiary);font-size:12px;text-align:left;padding:6px 0 0;cursor:pointer;font-variant-numeric:tabular-nums}
 .rtkw-doctor-toggle:hover{color:var(--dsw-alias-label-secondary)}

@@ -75,6 +75,8 @@ interface Snapshot {
   busy: boolean
   copied: boolean
   copyFailed: boolean
+  sessionCopied: boolean
+  sessionCopyFailed: boolean
   /** Session the pill currently renders for (from the slot's `inject`). */
   currentSessionKey: string | undefined
 }
@@ -93,6 +95,8 @@ const store: Snapshot = {
   busy: false,
   copied: false,
   copyFailed: false,
+  sessionCopied: false,
+  sessionCopyFailed: false,
   currentSessionKey: undefined,
 }
 const listeners = new Set<() => void>()
@@ -258,6 +262,24 @@ async function copyDoctor(): Promise<void> {
     patch({ doctorCopied: false, doctorCopyFailed: true })
     setTimeout(() => {
       patch({ doctorCopyFailed: false })
+    }, 1500)
+  }
+}
+
+/** Copy the full current session id for a bug report. */
+async function copySessionKey(): Promise<void> {
+  const key = store.currentSessionKey
+  if (key === undefined || key === '') return
+  try {
+    await navigator.clipboard.writeText(key)
+    patch({ sessionCopied: true, sessionCopyFailed: false })
+    setTimeout(() => {
+      patch({ sessionCopied: false })
+    }, 1500)
+  } catch {
+    patch({ sessionCopied: false, sessionCopyFailed: true })
+    setTimeout(() => {
+      patch({ sessionCopyFailed: false })
     }, 1500)
   }
 }
@@ -479,6 +501,12 @@ function createClientPlugin(require: (id: string) => unknown): {
       ...element([
         h('h4', null, t('panel.sectionFeedback')),
         h(
+          'p',
+          { className: 'rtkw-session' },
+          `${t('panel.currentSession')}: `,
+          h('code', null, snapshot.currentSessionKey ?? '—'),
+        ),
+        h(
           'div',
           { className: 'rtkw-actions' },
           h(
@@ -495,6 +523,22 @@ function createClientPlugin(require: (id: string) => unknown): {
               : snapshot.copyFailed
                 ? t('panel.copyFailed')
                 : t('panel.copy'),
+          ),
+          h(
+            'button',
+            {
+              type: 'button',
+              className: 'rtkw-action',
+              disabled: snapshot.currentSessionKey === undefined || snapshot.currentSessionKey === '',
+              onClick: () => {
+                void copySessionKey()
+              },
+            },
+            snapshot.sessionCopied
+              ? t('panel.copied')
+              : snapshot.sessionCopyFailed
+                ? t('panel.copyFailed')
+                : t('panel.copySession'),
           ),
         ),
         h('p', { className: 'rtkw-hint' }, t('panel.copyHint')),

@@ -8,6 +8,8 @@ import {
   readStatus,
   reduction,
   sessionMatches,
+  sessionState,
+  shortSessionKey,
   toneOf,
   type Translate,
 } from '../src/client/model'
@@ -104,6 +106,34 @@ describe('sessionMatches', () => {
   })
 })
 
+describe('sessionState', () => {
+  it('separates a missing record from an empty record', () => {
+    const missing = readStatus(payload({ session: null }))!
+    expect(sessionState(missing, 's2')).toBe('missing')
+    expect(sessionState(missing, undefined)).toBe('unknown')
+
+    const base = (payload() as { session: Record<string, unknown> }).session
+    const empty = readStatus(payload({ session: { ...base, compressions: 0 } }))!
+    expect(sessionState(empty, 's1')).toBe('empty')
+    expect(sessionState(empty, 's2')).toBe('stale')
+  })
+
+  it('keeps a populated current session and flags a mismatch', () => {
+    const view = readStatus(payload())!
+    expect(sessionState(view, 's1')).toBe('current')
+    expect(sessionState(view, 's2')).toBe('stale')
+    expect(sessionState(view, undefined)).toBe('current')
+  })
+})
+
+describe('shortSessionKey', () => {
+  it('drops the prefix and keeps the identifiable head and tail', () => {
+    expect(shortSessionKey('session-3a1eb71b-f018-426c-9756-203ce546561c')).toBe('3a1eb7…561c')
+    expect(shortSessionKey('s1')).toBe('s1')
+    expect(shortSessionKey('session-')).toBe('—')
+  })
+})
+
 describe('toneOf', () => {
   it('is off before the first document', () => {
     expect(toneOf(undefined, undefined)).toBe('off')
@@ -179,6 +209,19 @@ describe('pillText', () => {
     expect(pillText(view, undefined, translate('en')).primary).toBe('RTK ready')
   })
 
+  it('distinguishes a session with no record from a zero-compression record', () => {
+    const missing = readStatus(payload({ session: null }))
+    const missingText = pillText(missing, undefined, translate('en'), 's2')
+    expect(missingText.primary).toBe('RTK ready')
+    expect(missingText.secondary).toBe('no rtk record for this session yet')
+
+    const base = (payload() as { session: Record<string, unknown> }).session
+    const empty = readStatus(payload({ session: { ...base, compressions: 0 } }))
+    expect(pillText(empty, undefined, translate('en'), 's1').secondary).toBe(
+      'no compression recorded for this session yet',
+    )
+  })
+
   it('explains a degraded state instead of showing numbers', () => {
     const view = readStatus(payload({ pipeline: { mode: 'plugin-owned', health: 'problems', detail: 'validate failed' } }))
     const text = pillText(view, undefined, translate('en'))
@@ -245,6 +288,35 @@ describe('panelSections', () => {
     expect(sections[1]?.rows[0]?.label).toBe('nothing yet')
   })
 
+  it('does not claim a match when the requested session has no record', () => {
+    const sections = panelSections(
+      readStatus(payload({ session: null })),
+      undefined,
+      translate('zh'),
+      'session-3a1eb71b-f018-426c-9756-203ce546561c',
+    )
+    const keysRow = sections[0]?.rows.find((row) => row.label === '快照会话')
+    expect(keysRow?.value).toBe('本会话尚无快照 · 3a1eb7…561c')
+    expect(keysRow?.tone).toBeUndefined()
+    expect(sections[1]?.rows[0]?.label).toBe('本会话还没有 rtk 记录')
+    expect(sections[1]?.note).toContain('累计统计所有会话')
+  })
+
+  it('calls a zero-compression record empty, not missing', () => {
+    const base = (payload() as { session: Record<string, unknown> }).session
+    const zero = {
+      ...base,
+      compressions: 0,
+      savedTokens: 0,
+      rewrites: 0,
+      skipped: { size: 0, scope: 0, marked: 0, payload: 0, ptc: 0, noop: 0 },
+    }
+    const sections = panelSections(readStatus(payload({ session: zero })), undefined, translate('zh'), 's1')
+    expect(sections[1]?.rows[0]?.label).toBe('本会话还没有压缩记录')
+    const keysRow = sections[0]?.rows.find((row) => row.label === '快照会话')
+    expect(keysRow?.value).toBe('与当前会话一致 · s1')
+  })
+
   it('explains a zero saving only when rewrites did work', () => {
     const base = (payload() as { session: Record<string, unknown> }).session
     const zero = {
@@ -284,7 +356,8 @@ describe('panelSections', () => {
     expect(keysRow?.tone).toBe('warn')
     expect(keysRow?.value).toContain('≠')
     // Long ids are shortened so the row stays readable in a bug report screenshot.
-    expect(keysRow?.value).toContain('sessio…g-id')
+    expect(keysRow?.value).toContain('alpha-…g-id')
+    expect(keysRow?.value).toContain('beta-long-id')
     expect(keysRow?.value).not.toContain('session-alpha-long-id')
     expect(keysRow?.value).not.toContain('session-beta-long-id')
   })
@@ -292,7 +365,7 @@ describe('panelSections', () => {
   it('confirms the snapshot belongs to the current session', () => {
     const sections = panelSections(readStatus(payload()), undefined, translate('zh'), 's1')
     const keysRow = sections[0]?.rows.find((row) => row.label === '快照会话')
-    expect(keysRow?.value).toBe('与当前会话一致')
+    expect(keysRow?.value).toBe('与当前会话一致 · s1')
     expect(sections.map((section) => section.title)).toContain('本会话')
   })
 })
