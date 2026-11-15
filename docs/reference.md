@@ -119,7 +119,7 @@ lifetime   : 2 831 compressions, ~1.2M tok saved since 2026-11-05
 
 | 宿主 | rtk | 验证日期 | 证据 | 说明 |
 |---|---|---|---|---|
-| `0.2.2-rc.3` | `1.2.0` | 2026-11-15 | typecheck + 256 用例 + build + manifest/docs/preview + `verify-host`；rc.3/rc.5 双基线；npm 主包与 Windows fat tarball `smoke-pack` | 1.2.0 开发中（未发布） |
+| `0.2.2-rc.3` | `1.2.0` | 2026-11-15 | typecheck + 256 用例 + build + manifest/docs/preview + `verify-host`；`0.2.2-rc.3` / `0.2.1-rc.5` 双基线；npm 主包与 Windows fat tarball `smoke-pack` | 1.2.0 开发中（未发布） |
 | `0.2.2-rc.3` | `1.2.0` | 2026-11-14 | typecheck + 235 用例 + build + manifest/docs + `verify-host`；Windows x64 与 Linux arm64（dsh-go）实机验收 | 1.1.2 |
 | `0.2.2-rc.1` | `1.2.0` | 2026-11-13 | typecheck + 225 用例 + build + manifest/docs + `verify-host`；web profile 验收 | 1.1.1 |
 | `0.2.2-rc.1` | `1.2.0` | 2026-11-12 | typecheck + 220 用例；`build-vendor` 5 平台 + checksums；基准复跑 | 1.1.0 |
