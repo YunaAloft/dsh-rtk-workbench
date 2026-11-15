@@ -63,11 +63,19 @@ try {
   for (const relative of [
     'docs/reference.md',
     'docs/reference.en.md',
+    'docs/DETAIL.md',
+    'docs/DETAIL.zh.md',
+    'docs/preview.png',
+    'docs/preview.zh.png',
     'CHANGELOG.md',
     'README.en.md',
   ]) {
     check(existsSync(join(root, relative)), `${relative} is packed`)
   }
+  check(
+    !existsSync(join(root, 'docs/readme/banner.png')),
+    'docs/readme/banner.png is not packed',
+  )
 
   // The host half imports its peer dependency (`@deepseek-ai/schemastery`) as a
   // bare specifier; a profile provides it. Outside a profile we link the copy the
