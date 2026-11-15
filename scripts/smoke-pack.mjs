@@ -137,7 +137,13 @@ try {
 } finally {
   delete globalThis.window
   delete globalThis.document
-  rmSync(directory, { recursive: true, force: true })
+  try {
+    rmSync(directory, { recursive: true, force: true })
+  } catch {
+    // Windows can still hold a loaded module under the temp directory. The
+    // checks already ran; leaving one temp dir behind is not a gate failure.
+    console.warn(`smoke-pack: could not remove ${directory}`)
+  }
 }
 
 if (failures.length > 0) {
