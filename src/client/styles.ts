@@ -38,10 +38,11 @@ const CSS = `
 .rtkw-row dd.rtkw-ok{color:var(--dsw-alias-state-success-primary)}
 .rtkw-note{margin:6px 0 0;color:var(--dsw-alias-label-tertiary);font-size:12px;white-space:pre-line}
 .rtkw-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px}
-.rtkw-link{border:none;background:transparent;color:var(--dsw-alias-label-secondary);font-size:12px;padding:6px 0;cursor:pointer;text-align:left}
-.rtkw-shortcut{border:none;background:transparent;color:var(--dsw-alias-label-tertiary);font-size:11px;padding:6px 0 0;cursor:pointer;text-align:left}
-.rtkw-shortcut:hover{color:var(--dsw-alias-label-secondary);text-decoration:underline}
-.rtkw-link:hover{color:var(--dsw-alias-label-primary);text-decoration:underline}
+.rtkw-link{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;margin-top:8px;padding:6px 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);font-size:12px;cursor:pointer;text-align:left}
+.rtkw-link:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.rtkw-shortcut{display:inline-flex;align-items:center;gap:4px;margin-top:8px;padding:3px 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);font-size:11px;cursor:pointer;text-align:left}
+.rtkw-shortcut:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.rtkw-link:focus-visible,.rtkw-shortcut:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
 .rtkw-help{max-width:560px}
 .rtkw-help .rtkw-note{color:var(--dsw-alias-label-secondary);line-height:1.55}
 .rtkw-action{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer}
