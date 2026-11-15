@@ -110,7 +110,7 @@ function sessionRecord(lastAt: number): SessionRecord {
     savedTokens: 5,
     compressMs: 1,
     rewrites: 0,
-    skipped: { size: 0, scope: 0, marked: 0, payload: 0, ptc: 0 },
+    skipped: { size: 0, scope: 0, marked: 0, payload: 0, ptc: 0, noop: 0 },
     errors: { rtk: 0, timeout: 0 },
     lastAt,
     byTool: [],

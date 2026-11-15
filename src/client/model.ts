@@ -402,12 +402,28 @@ export interface PanelSection {
   readonly note?: string
 }
 
+/** Display labels for the skip reasons; JSON keeps the raw keys. */
+const SKIP_LABELS: Readonly<Record<string, string>> = {
+  size: 'panel.skipSize',
+  scope: 'panel.skipScope',
+  marked: 'panel.skipMarked',
+  payload: 'panel.skipPayload',
+  ptc: 'panel.skipPtc',
+  noop: 'panel.skipNoop',
+}
+
+/** Translate one skip reason, falling back to the raw key for older records. */
+function skipLabel(t: Translate, reason: string): string {
+  const key = SKIP_LABELS[reason]
+  return key === undefined ? reason : t(key)
+}
+
 /** Counts in a stable order, skipping zeros. */
-function skips(view: SessionView): PanelRow[] {
-  const order = ['size', 'scope', 'marked', 'payload', 'ptc']
+function skips(t: Translate, view: SessionView): PanelRow[] {
+  const order = ['size', 'scope', 'marked', 'payload', 'ptc', 'noop']
   return order
     .filter((reason) => (view.skipped[reason] ?? 0) > 0)
-    .map((reason) => ({ label: reason, value: String(view.skipped[reason] ?? 0) }))
+    .map((reason) => ({ label: skipLabel(t, reason), value: String(view.skipped[reason] ?? 0) }))
 }
 
 /**
@@ -502,7 +518,7 @@ export function panelSections(
               : []),
           ],
     ...(session !== null && Object.values(session.skipped).some((count) => count > 0)
-      ? { note: `${t('panel.skipped')}: ${skips(session)
+      ? { note: `${t('panel.skipped')}: ${skips(t, session)
           .map((row) => `${row.label} ${row.value}`)
           .join(' · ')}` }
       : {}),
@@ -547,7 +563,9 @@ export function panelSections(
             value:
               event.kind === 'compress'
                 ? `${event.tool} · ${reduction(event.ratio ?? 0)}`
-                : `${event.tool} · ${t('panel.skippedReason', { reason: event.reason ?? '?' })}`,
+                : `${event.tool} · ${t('panel.skippedReason', {
+                    reason: event.reason === undefined ? '?' : skipLabel(t, event.reason),
+                  })}`,
             tone: event.kind === 'compress' ? 'ok' : 'off',
           })),
   }

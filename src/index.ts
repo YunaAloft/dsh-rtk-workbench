@@ -365,6 +365,9 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
       lifetime.record({ kind: 'compress', inBytes, outBytes, savedTokens })
     },
     onSkipped: (exec, reason) => stats.recordSkipped(exec, reason),
+    onFailed: (exec, reason) => {
+      stats.recordError(exec, reason === 'timeout' ? 'timeout' : 'rtk')
+    },
     onForeignTransform: () => {
       foreignTransforms += 1
     },

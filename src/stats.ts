@@ -7,7 +7,7 @@ import { formatTokens } from './tokens'
 export { formatBytes }
 
 /** Why one result was not compressed (for the status summary). */
-export type SkipReason = 'size' | 'scope' | 'marked' | 'payload' | 'ptc'
+export type SkipReason = 'size' | 'scope' | 'marked' | 'payload' | 'ptc' | 'noop'
 
 /** What a compression pass did to one tool. */
 export interface ToolSaving {
@@ -107,7 +107,7 @@ function emptyStats(): SessionStats {
     compressMs: 0,
     rewrites: 0,
     byTool: new Map(),
-    skipped: { size: 0, scope: 0, marked: 0, payload: 0, ptc: 0 },
+    skipped: { size: 0, scope: 0, marked: 0, payload: 0, ptc: 0, noop: 0 },
     errors: { rtk: 0, timeout: 0 },
     lastAt: 0,
     recent: [],

@@ -42,7 +42,7 @@ function payload(overrides: Record<string, unknown> = {}): unknown {
       ms: 1400,
       ratio: 0.81,
       rewrites: 3,
-      skipped: { size: 9, scope: 4, marked: 0, payload: 0, ptc: 3 },
+      skipped: { size: 9, scope: 4, marked: 0, payload: 0, ptc: 3, noop: 2 },
       errors: { rtk: 0, timeout: 0 },
       byTool: [{ name: 'bash', calls: 12, inBytes: 100_000, outBytes: 19_000, savedTokens: 12_400 }],
       recent: [{ at: 1_760_000_000_000, tool: 'bash', kind: 'compress', savedTokens: 900, ratio: 0.9 }],
@@ -209,7 +209,9 @@ describe('panelSections', () => {
     expect(session?.rows[1]?.value).toContain('降幅 81%')
     expect(session?.rows[1]?.value).not.toContain('-81')
     expect(session?.rows[2]?.value).toContain('3 次改写')
-    expect(session?.note).toContain('size 9')
+    expect(session?.note).toContain('太小 9')
+    expect(session?.note).toContain('被动工具 3')
+    expect(session?.note).toContain('试压不划算 2')
     expect(sections[3]?.rows[0]?.label).toBe('bash')
     expect(sections[4]?.rows[0]?.value).toContain('↓90%')
   })

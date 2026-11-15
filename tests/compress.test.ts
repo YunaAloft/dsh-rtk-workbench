@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createCompressLayer, type CompressLayerOptions } from '../src/compress-layer'
 import type { Config } from '../src/config'
-import { extractHookOutput } from '../src/rtk/compress'
+import { classifyRtkRun, extractHookOutput } from '../src/rtk/compress'
 
 /** Minimal Config with the documented defaults. */
 function baseConfig(overrides: Partial<Config> = {}): Config {
@@ -42,7 +42,20 @@ function baseConfig(overrides: Partial<Config> = {}): Config {
 
 /** Fake round trip: records the call and returns a compressed body. */
 function fakeRoundTrip(body = 'compressed', note?: string) {
-  return vi.fn(async () => ({ text: body, ...(note === undefined ? {} : { note }) }))
+  return vi.fn(async () => ({
+    kind: 'ok' as const,
+    output: { text: body, ...(note === undefined ? {} : { note }) },
+  }))
+}
+
+/** Fake round trip where rtk decided not to change the text. */
+function fakeNoop() {
+  return vi.fn(async () => ({ kind: 'noop' as const }))
+}
+
+/** Fake round trip where the child never produced a usable answer. */
+function fakeFailure(reason: 'spawn' | 'timeout' | 'exit' | 'payload' | 'parse') {
+  return vi.fn(async () => ({ kind: 'failed' as const, reason }))
 }
 
 type LayerOptions = Partial<CompressLayerOptions>
@@ -224,5 +237,94 @@ describe('compression notes and spill', () => {
     expect(outBytes).toBe(5)
     // 4000 ASCII characters price at 1000 tokens; `short` prices at 2.
     expect(savedTokens).toBe(998)
+  })
+
+  it('counts rtk no-ops as skips, never as compressions', async () => {
+    const compressed = vi.fn()
+    const skipped = vi.fn()
+    const failed = vi.fn()
+    const layer = makeLayer(baseConfig(), {
+      compress: fakeNoop(),
+      onCompressed: compressed,
+      onSkipped: skipped,
+      onFailed: failed,
+    })
+    const text = await runOnce(layer, { name: 'bash', arguments: { command: 'cargo test' } }, 'x'.repeat(4096))
+    expect(text).toBeUndefined()
+    expect(compressed).not.toHaveBeenCalled()
+    expect(failed).not.toHaveBeenCalled()
+    expect(skipped).toHaveBeenCalledWith(expect.anything(), 'noop')
+  })
+
+  it('reports a failed round trip separately from a skip', async () => {
+    const compressed = vi.fn()
+    const skipped = vi.fn()
+    const failed = vi.fn()
+    const layer = makeLayer(baseConfig(), {
+      compress: fakeFailure('timeout'),
+      onCompressed: compressed,
+      onSkipped: skipped,
+      onFailed: failed,
+    })
+    await runOnce(layer, { name: 'bash', arguments: { command: 'cargo test' } }, 'x'.repeat(4096))
+    expect(compressed).not.toHaveBeenCalled()
+    expect(skipped).not.toHaveBeenCalled()
+    expect(failed).toHaveBeenCalledWith(expect.anything(), 'timeout')
+  })
+})
+
+describe('classifyRtkRun', () => {
+  const response = (stdout: string): string =>
+    JSON.stringify({ hookSpecificOutput: { updatedToolOutput: { stdout, stderr: '' } } })
+
+  it('returns the output when rtk produced a shorter body', () => {
+    expect(classifyRtkRun('bash', 'xxxx', { code: 0, stdout: response('x'), stderr: '' })).toEqual({
+      kind: 'ok',
+      output: { text: 'x' },
+    })
+  })
+
+  it('treats empty output and a defensive non-improvement as no-ops', () => {
+    expect(classifyRtkRun('bash', 'xxxx', { code: 0, stdout: '', stderr: '' })).toEqual({ kind: 'noop' })
+    expect(classifyRtkRun('bash', 'xxxx', { code: 0, stdout: response('yyyy'), stderr: '' })).toEqual({
+      kind: 'noop',
+    })
+  })
+
+  it('separates spawn, timeout, exit and payload failures', () => {
+    expect(classifyRtkRun('bash', 'xxxx', { code: null, stdout: '', stderr: '', failure: { kind: 'spawn', message: 'enoent' } })).toEqual({
+      kind: 'failed',
+      reason: 'spawn',
+    })
+    expect(classifyRtkRun('bash', 'xxxx', { code: null, stdout: '', stderr: '', failure: { kind: 'timeout', message: 'slow' } })).toEqual({
+      kind: 'failed',
+      reason: 'timeout',
+    })
+    expect(classifyRtkRun('bash', 'xxxx', { code: 1, stdout: '', stderr: 'boom' })).toEqual({
+      kind: 'failed',
+      reason: 'exit',
+    })
+    expect(classifyRtkRun('bash', 'xxxx', { code: 1, stdout: '', stderr: 'hook stdin exceeds 64 MiB limit' })).toEqual({
+      kind: 'failed',
+      reason: 'payload',
+    })
+  })
+
+  it('reports a malformed success as a parse failure', () => {
+    expect(classifyRtkRun('bash', 'xxxx', { code: 0, stdout: 'not json', stderr: '' })).toEqual({
+      kind: 'failed',
+      reason: 'parse',
+    })
+  })
+
+  it('treats an aborted call as a no-op rather than an rtk error', () => {
+    expect(
+      classifyRtkRun('bash', 'xxxx', {
+        code: null,
+        stdout: '',
+        stderr: '',
+        failure: { kind: 'abort', message: 'cancelled' },
+      }),
+    ).toEqual({ kind: 'noop' })
   })
 })

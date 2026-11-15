@@ -1,4 +1,4 @@
-import { runRtk } from './exec'
+import { runRtk, type RtkRun } from './exec'
 
 /** Content format rtk should see for one tool result. */
 export type ResultShape = 'read' | 'bash'
@@ -116,12 +116,59 @@ export function extractUpdatedText(shape: ResultShape, stdout: string): string |
   return extractHookOutput(shape, stdout)?.text ?? null
 }
 
+/** Why a compression round trip produced no usable body. */
+export type CompressFailureReason = 'spawn' | 'timeout' | 'exit' | 'payload' | 'parse'
+
+/**
+ * One round trip, with failure and no-op kept apart.
+ *
+ * `noop` is rtk saying "nothing worth changing" (empty output, or a defensive
+ * non-improvement); it is a normal outcome and must not be counted as a
+ * compression or as an error. `failed` is a broken invocation: the caller can
+ * surface it as an rtk error instead of disguising it as "compressed nothing".
+ */
+export type CompressResult =
+  | { readonly kind: 'ok'; readonly output: HookOutput }
+  | { readonly kind: 'noop' }
+  | { readonly kind: 'failed'; readonly reason: CompressFailureReason }
+
+/**
+ * Classify one settled rtk invocation without spawning anything.
+ *
+ * @param shape - response shape the payload used.
+ * @param text - original text (used for the defensive non-improvement check).
+ * @param run - settled invocation.
+ */
+export function classifyRtkRun(shape: ResultShape, text: string, run: RtkRun): CompressResult {
+  if (run.failure !== undefined) {
+    if (run.failure.kind === 'timeout') return { kind: 'failed', reason: 'timeout' }
+    // A cancelled tool call is not an rtk fault and has nothing to report.
+    if (run.failure.kind === 'abort') return { kind: 'noop' }
+    return { kind: 'failed', reason: 'spawn' }
+  }
+  if (run.code !== 0) {
+    const detail = run.stderr.toLowerCase()
+    if (detail.includes('stdin exceeds') || detail.includes('payload') || detail.includes('too large')) {
+      return { kind: 'failed', reason: 'payload' }
+    }
+    return { kind: 'failed', reason: 'exit' }
+  }
+  // rtk writes nothing when no rule improved the output; that is a normal no-op.
+  if (run.stdout.trim() === '') return { kind: 'noop' }
+  const output = extractHookOutput(shape, run.stdout)
+  if (output === null) return { kind: 'failed', reason: 'parse' }
+  // Defensive: rtk already refuses a non-improvement (`never_worse`), but a
+  // future rule could still hand back something larger than the input.
+  if (output.text.length >= text.length) return { kind: 'noop' }
+  return { kind: 'ok', output }
+}
+
 /**
  * Run one compression round trip.
  *
- * @returns the compressed text, or `null` for "keep the original" — which covers
- * a missing binary, a timeout, an unrecognized response, and rtk deciding the
- * result was not worth touching.
+ * @returns a discriminated result: `ok` with the compressed body, `noop` when
+ * rtk had nothing worth changing, or `failed` with the reason the invocation
+ * did not complete.
  */
 export async function compressWithRtk(options: {
   readonly binary: string
@@ -138,7 +185,7 @@ export async function compressWithRtk(options: {
    * attributable to the project the user is actually working in.
    */
   readonly cwd?: string
-}): Promise<HookOutput | null> {
+}): Promise<CompressResult> {
   const payload = buildPostToolUsePayload(options.shape, options.command, options.path, options.text)
   const run = await runRtk(options.binary, ['hook', 'claude'], {
     input: payload,
@@ -148,11 +195,5 @@ export async function compressWithRtk(options: {
     maxBytes: options.text.length * 2 + 64 * 1024,
     ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
   })
-  if (run.failure !== undefined || run.code !== 0) return null
-  const updated = extractHookOutput(options.shape, run.stdout)
-  if (updated === null) return null
-  // Defensive: rtk already refuses to emit a non-improvement (`never_worse`),
-  // but a future rule could still hand back something larger than the input.
-  if (updated.text.length >= options.text.length) return null
-  return updated
+  return classifyRtkRun(options.shape, options.text, run)
 }
