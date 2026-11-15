@@ -16,6 +16,10 @@
     "cordis.patch.yml",
     "docs/reference.md",
     "docs/reference.en.md",
+    "docs/DETAIL.md",
+    "docs/DETAIL.zh.md",
+    "docs/preview.png",
+    "docs/preview.zh.png",
     "CHANGELOG.md",
     "locale/*.json",
     "icon.svg",
@@ -25,6 +29,7 @@
     "build": "tsdown",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.client.json",
     "test": "vitest run",
+    "check:preview": "node scripts/check-preview.mjs",
     "prepare": "tsdown",
     "verify:host": "node scripts/verify-host.mjs",
     "benchmark": "node scripts/benchmark.mjs",
@@ -70,7 +75,7 @@
     "token",
     "compression"
   ],
-  "dshTarget": "0.2.2-rc.1",
+  "dshTarget": "0.2.2-rc.3",
   "dshRtkVersion": "1.2.0",
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis": {

@@ -66,7 +66,7 @@ export interface LifetimeView {
 export interface StatusView {
   readonly updatedAt: string
   readonly binary: { readonly source: string; readonly version: string }
-  readonly probe: { readonly state: string; readonly detail: string }
+  readonly probe: { readonly state: string; readonly detail: string; readonly probing: boolean }
   readonly pipeline: { readonly mode: string; readonly health: string; readonly detail?: string }
   readonly switches: {
     readonly rewrite: boolean
@@ -184,7 +184,7 @@ export function readStatus(input: unknown): StatusView | undefined {
   return {
     updatedAt: str(raw.updatedAt),
     binary: { source: str(binary.source, 'unknown'), version: str(binary.version) },
-    probe: { state: str(probe.state, 'unknown'), detail: str(probe.detail) },
+    probe: { state: str(probe.state, 'unknown'), detail: str(probe.detail), probing: bool(probe.probing) },
     pipeline: {
       mode: str(pipeline.mode),
       health: str(pipeline.health, 'unknown'),
@@ -226,6 +226,8 @@ export function toneOf(view: StatusView | undefined, error: string | undefined):
   // document exists, a failed refresh warns that the visible numbers are stale.
   if (view === undefined) return 'off'
   if (error !== undefined) return 'warn'
+  // The first probe (or its retry) is still running: neutral, not a failure.
+  if (view.probe.probing && view.probe.state !== 'fail') return 'off'
   if (view.probe.state === 'fail') return 'warn'
   // Compression is where the savings come from; with it off the pill must not
   // keep showing a healthy green dot over a frozen number.
@@ -250,6 +252,53 @@ function percentOf(ratio: number): number {
  */
 export function reduction(ratio: number): string {
   return `↓${String(percentOf(ratio))}%`
+}
+
+/** Two-digit clock/date component. */
+function two(value: number): string {
+  return String(value).padStart(2, '0')
+}
+
+/** Local time of a self-check; the date appears only when it is not today. */
+function doctorTime(at: number, now: number): string {
+  const date = new Date(at)
+  const current = new Date(now)
+  const clock = `${two(date.getHours())}:${two(date.getMinutes())}:${two(date.getSeconds())}`
+  const sameDay =
+    date.getFullYear() === current.getFullYear() &&
+    date.getMonth() === current.getMonth() &&
+    date.getDate() === current.getDate()
+  return sameDay ? clock : `${two(date.getMonth() + 1)}-${two(date.getDate())} ${clock}`
+}
+
+/**
+ * Timestamp line above an expanded self-check.
+ *
+ * @param t - translator.
+ * @param at - self-check completion time, epoch ms.
+ * @param now - clock used to decide whether the date is needed; injectable for tests.
+ */
+export function doctorStamp(t: Translate, at: number, now = Date.now()): string {
+  return t('panel.doctorAt', { time: doctorTime(at, now) })
+}
+
+/**
+ * Label of the collapsed self-check row.
+ *
+ * @param t - translator.
+ * @param at - self-check completion time, epoch ms.
+ * @param failed - whether the request itself failed.
+ * @param now - clock used to decide whether the date is needed; injectable for tests.
+ */
+export function doctorCollapsedLabel(
+  t: Translate,
+  at: number,
+  failed: boolean,
+  now = Date.now(),
+): string {
+  return t(failed ? 'panel.doctorCollapsedFailed' : 'panel.doctorCollapsed', {
+    time: doctorTime(at, now),
+  })
 }
 
 /**
@@ -280,9 +329,49 @@ export function pillVisible(view: StatusView | undefined, error?: string): boole
  * @param currentSessionKey - session id from the slot's `inject`, if known.
  */
 export function sessionMatches(view: StatusView, currentSessionKey: string | undefined): boolean {
-  if (view.session === null) return true
-  if (currentSessionKey === undefined || currentSessionKey === '') return true
-  return view.session.key === currentSessionKey
+  return sessionState(view, currentSessionKey) !== 'stale'
+}
+
+/**
+ * Which session state a document describes.
+ *
+ * `missing` and `empty` look alike in the UI but are different facts: the host
+ * has no record for the requested key, or it has a record whose compression
+ * counters are still zero. Keeping them apart lets the panel say "no record
+ * for this session" instead of claiming a match that was never received.
+ */
+export type SessionState = 'missing' | 'empty' | 'current' | 'stale' | 'unknown'
+
+/**
+ * Classify the session block relative to the session the browser is showing.
+ *
+ * @param view - last good document.
+ * @param currentSessionKey - session id from the slot's `inject`, if known.
+ */
+export function sessionState(view: StatusView, currentSessionKey: string | undefined): SessionState {
+  if (view.session === null) {
+    return currentSessionKey === undefined || currentSessionKey === '' ? 'unknown' : 'missing'
+  }
+  if (currentSessionKey === undefined || currentSessionKey === '') {
+    return view.session.compressions === 0 ? 'empty' : 'current'
+  }
+  if (view.session.key !== currentSessionKey) return 'stale'
+  return view.session.compressions === 0 ? 'empty' : 'current'
+}
+
+/**
+ * Shorten a session id for a diagnostic row.
+ *
+ * The `session-` prefix is noise in a row already labelled "snapshot session";
+ * keeping the first six and last four characters is enough to tell two ids
+ * apart without pushing the row into a second line.
+ *
+ * @param key - full session id.
+ */
+export function shortSessionKey(key: string): string {
+  const bare = key.startsWith('session-') ? key.slice('session-'.length) : key
+  if (bare === '') return '—'
+  return bare.length > 12 ? `${bare.slice(0, 6)}…${bare.slice(-4)}` : bare
 }
 
 /** The two lines of the pill. */
@@ -318,15 +407,19 @@ export function pillText(
     return { primary: t('pill.offline'), secondary: t('pill.offlineDetail', { error }) }
   }
   if (view === undefined) return { primary: t('pill.loading'), secondary: '' }
-  if (!sessionMatches(view, currentSessionKey)) return { primary: t('pill.loading'), secondary: '' }
+  const state = sessionState(view, currentSessionKey)
+  if (state === 'stale') return { primary: t('pill.loading'), secondary: '' }
+  if (view.probe.probing && view.probe.state !== 'fail') {
+    return { primary: t('pill.initializing'), secondary: t('pill.initializingDetail') }
+  }
   if (view.probe.state === 'fail') return { primary: t('pill.unavailable'), secondary: view.probe.detail }
   if (!view.switches.compress) return { primary: t('pill.compressOff'), secondary: '' }
   if (view.pipeline.health === 'problems') {
     return { primary: t('pill.degraded'), secondary: view.pipeline.detail ?? '' }
   }
-  if (view.session === null || view.session.compressions === 0) {
-    return { primary: t('pill.ready'), secondary: t('pill.readyDetail') }
-  }
+  if (state === 'missing') return { primary: t('pill.ready'), secondary: t('pill.noSessionRecord') }
+  if (state === 'empty') return { primary: t('pill.ready'), secondary: t('pill.noCompressionRecord') }
+  if (view.session === null) return { primary: t('pill.ready'), secondary: t('pill.readyDetail') }
   const session = view.session
   const secondary = t('pill.detail', {
     calls: session.compressions,
@@ -355,12 +448,28 @@ export interface PanelSection {
   readonly note?: string
 }
 
+/** Display labels for the skip reasons; JSON keeps the raw keys. */
+const SKIP_LABELS: Readonly<Record<string, string>> = {
+  size: 'panel.skipSize',
+  scope: 'panel.skipScope',
+  marked: 'panel.skipMarked',
+  payload: 'panel.skipPayload',
+  ptc: 'panel.skipPtc',
+  noop: 'panel.skipNoop',
+}
+
+/** Translate one skip reason, falling back to the raw key for older records. */
+function skipLabel(t: Translate, reason: string): string {
+  const key = SKIP_LABELS[reason]
+  return key === undefined ? reason : t(key)
+}
+
 /** Counts in a stable order, skipping zeros. */
-function skips(view: SessionView): PanelRow[] {
-  const order = ['size', 'scope', 'marked', 'payload', 'ptc']
+function skips(t: Translate, view: SessionView): PanelRow[] {
+  const order = ['size', 'scope', 'marked', 'payload', 'ptc', 'noop']
   return order
     .filter((reason) => (view.skipped[reason] ?? 0) > 0)
-    .map((reason) => ({ label: reason, value: String(view.skipped[reason] ?? 0) }))
+    .map((reason) => ({ label: skipLabel(t, reason), value: String(view.skipped[reason] ?? 0) }))
 }
 
 /**
@@ -385,14 +494,21 @@ export function panelSections(
       ? [{ title: t('panel.loading'), rows: [] }]
       : [{ title: t('panel.health'), rows: [{ label: t('panel.error'), value: error, tone: 'warn' }] }]
   }
-  const stale = !sessionMatches(view, currentSessionKey)
-  const shorten = (key: string): string => (key.length > 12 ? `${key.slice(0, 6)}…${key.slice(-4)}` : key)
+  const state = sessionState(view, currentSessionKey)
+  const stale = state === 'stale'
   const health: PanelRow[] = [
     { label: t('panel.binary'), value: `${view.binary.source}${view.binary.version === '' ? '' : ` · ${view.binary.version}`}` },
     {
       label: t('panel.probe'),
-      value: view.probe.state === 'ok' ? t('panel.ok') : view.probe.state === 'fail' ? t('panel.failed') : t('panel.unknown'),
-      tone: view.probe.state === 'fail' ? 'warn' : 'ok',
+      value:
+        view.probe.probing && view.probe.state !== 'fail'
+          ? t('panel.initializing')
+          : view.probe.state === 'ok'
+            ? t('panel.ok')
+            : view.probe.state === 'fail'
+              ? t('panel.failed')
+              : t('panel.unknown'),
+      tone: view.probe.state === 'fail' ? 'warn' : view.probe.probing ? undefined : 'ok',
     },
     {
       label: t('panel.pipeline'),
@@ -408,17 +524,20 @@ export function panelSections(
     },
   ]
   if (currentSessionKey !== undefined && currentSessionKey !== '') {
+    const current = shortSessionKey(currentSessionKey)
     health.push(
       stale
         ? {
             label: t('panel.sessionKeys'),
             value: t('panel.sessionMismatch', {
-              shown: shorten(view.session?.key ?? '—'),
-              current: shorten(currentSessionKey),
+              shown: shortSessionKey(view.session?.key ?? ''),
+              current,
             }),
             tone: 'warn',
           }
-        : { label: t('panel.sessionKeys'), value: t('panel.sessionMatch') },
+        : state === 'missing'
+          ? { label: t('panel.sessionKeys'), value: t('panel.sessionMissing', { key: current }) }
+          : { label: t('panel.sessionKeys'), value: t('panel.sessionMatch', { key: current }) },
     )
   }
   if (error !== undefined) health.push({ label: t('panel.error'), value: error, tone: 'warn' })
@@ -431,12 +550,26 @@ export function panelSections(
   }
 
   const session = view.session
+  const notes: string[] = []
+  if (state === 'missing') notes.push(t('panel.lifetimeCoversAll'))
+  if (session !== null && session.savedTokens === 0 && session.rewrites > 0) {
+    notes.push(t('panel.noteZeroSaved'))
+  }
+  if (session !== null && Object.values(session.skipped).some((count) => count > 0)) {
+    notes.push(
+      `${t('panel.skipped')}: ${skips(t, session)
+        .map((row) => t('panel.skippedCount', { label: row.label, count: row.value }))
+        .join(' · ')}`,
+    )
+  }
   const sessionSection: PanelSection = {
     title: t('panel.session'),
     rows:
-      session === null || session.compressions === 0
-        ? [{ label: t('panel.none'), value: '' }]
-        : [
+      state === 'missing'
+        ? [{ label: t('panel.noSessionRecord'), value: '' }]
+        : session === null || session.compressions === 0
+          ? [{ label: session === null ? t('panel.none') : t('panel.noCompressionRecord'), value: '' }]
+          : [
             { label: t('panel.savedTokens'), value: `≈${formatTokens(session.savedTokens)} tok` },
             {
               label: t('panel.savedBytes'),
@@ -454,11 +587,7 @@ export function panelSections(
               ? [{ label: t('panel.guard'), value: String(view.rewrites.guards), tone: 'warn' as Tone }]
               : []),
           ],
-    ...(session !== null && Object.values(session.skipped).some((count) => count > 0)
-      ? { note: `${t('panel.skipped')}: ${skips(session)
-          .map((row) => `${row.label} ${row.value}`)
-          .join(' · ')}` }
-      : {}),
+    ...(notes.length > 0 ? { note: notes.join('\n') } : {}),
   }
 
   const lifetimeSection: PanelSection = {
@@ -500,7 +629,9 @@ export function panelSections(
             value:
               event.kind === 'compress'
                 ? `${event.tool} · ${reduction(event.ratio ?? 0)}`
-                : `${event.tool} · ${t('panel.skippedReason', { reason: event.reason ?? '?' })}`,
+                : `${event.tool} · ${t('panel.skippedReason', {
+                    reason: event.reason === undefined ? '?' : skipLabel(t, event.reason),
+                  })}`,
             tone: event.kind === 'compress' ? 'ok' : 'off',
           })),
   }

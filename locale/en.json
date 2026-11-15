@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "RTK Workbench",
-    "description": "Cuts tool-output tokens before they reach the context: rewrite, compress, rtk built in."
+    "description": "Cuts tool output to a minimum before it enters the context — rewrites commands, compresses output, rtk built in, and shows how many tokens you saved at a glance.",
+    "detail": "docs/DETAIL.md"
   }
 }

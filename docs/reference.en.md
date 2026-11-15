@@ -1,6 +1,8 @@
-# dsh-rtk-workbench reference (1.1.2)
+# dsh-rtk-workbench reference
 
-Applies to DSH `0.2.2-rc.3` (runtime-verified; the `0.2.x` line is compatible and `dshTarget` moves to rc.3 with 1.2.0), rtk `1.2.0`, Node `^22.19.0 || >=24`. Restart `dsh web` after installing — a bundle change is not a page refresh.
+> This document tracks the main development line (1.2.0 in development); the published version is whatever npm / the GitHub tag says.
+
+Applies to DSH `0.2.2-rc.3` (`dshTarget`; the `0.2.x` line is compatible), rtk `1.2.0`, Node `^22.19.0 || >=24`. Restart `dsh web` after installing — a bundle change is not a page refresh.
 
 ## 1. Install and verify
 
@@ -32,7 +34,9 @@ The `binary` line names the source: `bundled` (shipped with the package), `path`
 | `/rtk on\|off <rewrite\|compress\|ui>` | Toggle; `rewrite`/`compress` apply to this session (`/rtk off compress` isolates a competing result transformer), while `ui` writes the profile config and **persists** across restarts until `/rtk on ui` |
 | `/rtk help [topic]` | Command list; `topic` is `pipeline`, `sandbox`, `recovery` or `config` |
 
-**Web pill and overlay.** In the web GUI the plugin renders one pill in the composer dock row under the input box (beside the host's activity/usage pills) — `saved 12.4k tok · ↓81%` — with the compression and rewrite counts beside it and the guard count only after a rejection. It matches the host's dock readings: no border and no background, the headline in `label-secondary`, the detail and separator in `label-tertiary`, and a soft background only on hover. The pill leads with a 14px icon and a state dot; it shrinks when space is short, and narrow viewports converge in three steps: ≤767px drops the compression/rewrite counts, ≤480px keeps only `saved X tok`, and ≤360px collapses the savings headline to icon plus dot (state words such as ready/unavailable/off stay). Three colours: normal, warning (rtk unusable, or the injected pipeline fell back), grey (compression switched off, or the status route never answered). Clicking it opens an overlay with health, this session, lifetime, by-tool rows, skip reasons, the last three events, a self-check button and a diagnostics copy action. The pill is hidden until the first status document arrives, except that a failed first fetch renders a grey `rtk unavailable` pill whose overlay shows the error, so a fail-closed route is visible instead of looking like the plugin never loaded. It can be turned off with `uiPill: false` or `/rtk off ui`; the command writes the profile config and stays off across restarts.
+The host's ghost hint after `/rtk ` lists only the short syntax `help · status · on/off <switch>`; the table above or `/rtk help` has the full list.
+
+**Web pill and overlay.** In the web GUI the plugin renders one pill in the composer dock row under the input box (beside the host's activity/usage pills) — `saved 12.4k tok · ↓81%` — with the compression and rewrite counts beside it and the guard count only after a rejection. It matches the host's dock readings: no border and no background, the headline in `label-secondary`, the detail in `label-tertiary`; the `·` separator has 6px on each side and uses `separator-primary`, like the official readings. The pill leads with a 14px icon and a state dot; it shrinks when space is short, and narrow viewports converge in three steps: ≤767px drops the compression/rewrite counts, ≤480px keeps only `saved X tok`, and ≤360px collapses the savings headline to icon plus dot (state words such as ready/unavailable/off stay). Three colours: normal, warning (`RTK unusable`, or the injected pipeline fell back), grey (the first probe is initializing, compression is switched off, or the status route never answered); a slow first probe shows `RTK initializing` and turns green after a retry succeeds. Clicking it opens an overlay in this order: health, this session, lifetime, by-tool rows, the last three events, then **Diagnostics** and **Feedback & export**. The health block ends with a "View diagnostics ↓" outlined button that scrolls to the diagnostics block. Diagnostics starts collapsed as `Last check · time` (`Last check failed · time` when the request failed; the date appears when it is not today) and expands to the full text; while running, the button reads "Running self-check…" with a short hint, and a completed or failed run expands automatically while reopening the overlay collapses it again. Its buttons are Run self-check / Clear / Copy check text, and the copied text starts with `Checked at …`. Feedback & export has Copy status JSON, a one-line explanation, and a "Click here to see how to read this data →" inline button that opens a drawer (reading the self-check / what the status JSON is / common failures and next steps; Escape or the backdrop closes it). Skip reasons in the session block are shown with labels and counts (too small 10× / file-search 6× / already marked / payload too large / passive tool / no gain) while the JSON and `/rtk stats` keep the raw keys. The pill is hidden until the first status document arrives, except that a failed first fetch renders a grey `RTK unreachable` pill whose overlay shows the error, so a fail-closed route is visible instead of looking like the plugin never loaded. It can be turned off with `uiPill: false` or `/rtk off ui`; the command writes the profile config and stays off across restarts.
 
 **Counter persistence.** Lifetime totals and per-session counters share `<DSH_HOME>/rtk-workbench/stats.json` (format v2): sessions are kept by last activity up to 512 entries and dropped after 60 days; only counts, tool names and timestamps are stored — never command text or output. After a host restart, the same conversation's pill resumes its compression and rewrite numbers and keeps accumulating. `statsPersist: off` disables both.
 
@@ -56,7 +60,7 @@ Every key can be overridden from `cordis.patch.yml`; values are validated at loa
 | `rtkPath` | `''` | Explicit binary; empty = `RTK_BIN` / `DSH_RTK_BIN` / bundled / PATH |
 | `rtkSource` | `auto` | `auto` prefers the bundled binary; `path` resolves through PATH |
 | `timeoutMs` | `2000` | Steady-state per-call budget; a timeout means no rewrite and no compression |
-| `coldStartTimeoutMs` | `8000` | First-call budget; scanning an unsigned binary takes 2.7–5.8 s on first spawn |
+| `coldStartTimeoutMs` | `8000` | First-call budget; scanning an unsigned binary takes 2.7–5.8 s on first spawn. The background first probe uses at least 15 s and retries a timeout once |
 | `rewriteEnabled` | `true` | Master switch for rewriting |
 | `rewriteFallback` | `retry` | Replay the original command when rtk itself failed (rtk failure signatures only) |
 | `rewriteSandboxGuard` | `auto` | Windows + confined sandbox skips rewrites (see `help sandbox`); `off` forces them |
@@ -107,15 +111,15 @@ Every key can be overridden from `cordis.patch.yml`; values are validated at loa
 
 | Component | Version |
 |---|---|
-| DeepSeek Harness | `0.2.2-rc.1` (target; `dshTarget` in `package.json`; the runtime was verified on `0.2.2-rc.3`) |
+| DeepSeek Harness | `0.2.2-rc.3` (target; `dshTarget` in `package.json`; the same release was used at runtime) |
 | rtk | `1.2.0` (bundled; `dshRtkVersion`) |
 | Node | `^22.19.0 || >=24` |
-| Plugin | `1.1.2` |
 
 **Verified hosts.** One row is added or refreshed before every release; the evidence is that commit's gates plus a runtime smoke.
 
 | Host | rtk | Checked | Evidence | Notes |
 |---|---|---|---|---|
+| `0.2.2-rc.3` | `1.2.0` | 2026-11-15 | typecheck + 256 tests + build + manifest/docs/preview + `verify-host`; `0.2.2-rc.3` / `0.2.1-rc.5` dual baseline; npm main and Windows fat tarball `smoke-pack` | 1.2.0 in development (not released) |
 | `0.2.2-rc.3` | `1.2.0` | 2026-11-14 | typecheck + 235 tests + build + manifest/docs + `verify-host`; Windows x64 and Linux arm64 (dsh-go) acceptance | 1.1.2 |
 | `0.2.2-rc.1` | `1.2.0` | 2026-11-13 | typecheck + 225 tests + build + manifest/docs + `verify-host`; web profile acceptance | 1.1.1 |
 | `0.2.2-rc.1` | `1.2.0` | 2026-11-12 | typecheck + 220 tests; `build-vendor` on 5 platforms + checksums; benchmark re-run | 1.1.0 |
@@ -135,8 +139,11 @@ Check a host: `node scripts/verify-host.mjs` (detect the installed one), `--host
 
 "Verified" means that commit's gates pass and the maintainer installed the packed tarball into a clean profile, restarted the host, and ran `/rtk status`, `/rtk doctor`, one rewrite and one compression; it does not claim every platform × sandbox × co-install combination.
 
-The matrix describes the plugin's *observable* behaviour. "skipped" always means
-"refused before spawning", never "tried and failed silently".
+The matrix describes the plugin's *observable* behaviour. "skipped" usually means
+a refusal before spawning (too small, file/search, already marked, payload too
+large, passive tool); `noop` means rtk was tried and judged the change not worth
+it, and still counts as a skip. An rtk that cannot start, times out, or returns
+an unparseable body is counted under `errors`, not as a compression or a skip.
 
 | Environment | Rewrite | Compress | Recover | Notes |
 |---|---|---|---|---|

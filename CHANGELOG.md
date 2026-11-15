@@ -2,6 +2,31 @@
 
 All notable changes to `dsh-rtk-workbench`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+Makes the overlay explain itself, gives the plugin page a real preview image, and stops counting an rtk no-op as a compression. This update also fixes the stale-stylesheet bug from #17 and avoids a false "unusable" flash on a slow first probe.
+
+### Added
+
+- The overlay now has separate **Diagnostics** and **Feedback & export** blocks at the bottom, after health, this session, lifetime, by-tool rows and recent events. Diagnostics records when the self-check ran, starts collapsed, expands to the full text, and can be cleared or copied with a `Checked at …` first line; a running check shows `正在自检…` with a short hint, and the completed or failed result opens automatically. Feedback copies the status JSON, explains what it is for, and opens a self-contained help drawer through the `点击此处可查看如何解读这些数据 →` button (reading the self-check, the status JSON, and common failures). The health block ends with a `查看诊断 ↓` button that scrolls to the diagnostics block.
+- The first capability probe is an initializing state: it gets a 15-second budget and one automatic retry after a timeout, showing a neutral `RTK 初始化中` instead of a false yellow `RTK 不可用`. Only a final failure turns the pill yellow; a successful retry goes straight to green.
+- The plugin detail page now shows a single feature preview per UI language. `locale/*.json` points `meta.detail` at `docs/DETAIL.md` / `docs/DETAIL.zh.md`, each referencing a 1280×480 (2× of 640×240) PNG. The README fallback, which dropped raw HTML images and showed Chinese text in the English UI, is no longer used for the detail page.
+- A repository-owned `scripts/check-preview.mjs` runs in CI and verifies the PNG pair, both DETAIL documents, `meta.detail`, and `package.json#files`; `smoke-pack` verifies the four files in both tarball shapes and that the README banner is not shipped.
+
+### Changed
+
+- Status/session copy now uses `RTK` for the product and `rtk` for commands and binaries. The unreachable status route and the failed binary probe get distinct first lines: `RTK 状态不可达` / `RTK unreachable` versus `RTK 不可用` / `RTK unusable`.
+- The diagnostics action is now `复制状态 JSON` / `Copy status JSON`, with a usage hint below it and a visible `复制失败` / `Copy failed` state when the clipboard rejects the write.
+- Skip reasons are displayed with labels and counts (`太小 10 次 · 文件/搜索 6 次 · 试压不划算 4 次`; `too small 10× …`) while the JSON and `/rtk stats` keep the raw keys. The session block explains a zero saving when rewrites happened but compression had nothing left to do. The feedback block also shows the full current session id with a copy action for bug reports.
+- The pill separator matches the host's readings: 6px on each side and `separator-primary`. The `/rtk` ghost hint is now the short `help · status · on/off <switch>`.
+
+### Fixed
+
+- A session with no stats record no longer renders as `nothing yet` with the health row claiming it matches the current session. The overlay now distinguishes a missing session (`no rtk record for this session yet`) from a record with zero compressions, and explains that the lifetime total covers all sessions (#19).
+- An in-place plugin update refreshed the new JavaScript but kept the old `<style>` element, leaving new markup with stale CSS: the icon rendered at its intrinsic 300×150 and the pill lost its frame. The client now replaces the existing stylesheet's contents instead of returning early (#17).
+- An rtk invocation that returned nothing useful no longer increments `compressions` while leaving `in == out` and `savedTokens == 0`. Only a real `ok` result is counted; a normal `noop` is recorded under `skipped`, and spawn/timeout/exit/payload/parse failures are recorded under `errors`.
+- A cold first probe no longer paints the pill yellow while a freshly installed Windows binary is still being scanned. The probe keeps a neutral initializing state, uses a 15-second budget and retries a timeout once; only the final failure is reported as `RTK 不可用`.
+
 ## [1.1.2] — 2026-11-14
 
 Fixes the mobile composer-dock layout reported in #15, matches the pill to the host's dock readings, keeps the pill switch across restarts (#14), and keeps this conversation's counters after a restart.
@@ -86,7 +111,7 @@ The savings become visible: one token estimate everywhere, a cross-restart ledge
 - README defaults to Chinese (`README.en.md` keeps English) and was trimmed from 149 to 108 lines; the earlier per-case table moved into the benchmark document.
 - `dshTarget` is `0.2.2-rc.1`. The verified-host row was added to `docs/compatibility.md`.
 - Configuration keys and the `/rtk` command surface are frozen from this release: further keys are additive only.
-- **Distribution only, not in the package:** the GitHub release asset now also carries `docs/`, `CHANGELOG.md` and `README.en.md` (it previously shipped a README whose relative links pointed at files the tarball did not contain), and the packaging script fails loudly when a staged path disappears. The npm tarball already contained them, so no package content changed and no new version was cut.
+- **Distribution only, not in the package:** the GitHub release asset now also carries `docs/`, `CHANGELOG.md` and `README.en.md` (it previously shipped a README whose relative buttons pointed at files the tarball did not contain), and the packaging script fails loudly when a staged path disappears. The npm tarball already contained them, so no package content changed and no new version was cut.
 
 ## [0.2.0] — 2026-11-03
 

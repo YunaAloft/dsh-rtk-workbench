@@ -1,6 +1,6 @@
 import type { PostToolDecision, ToolExecution, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import type { Config } from './config'
-import { compressWithRtk, pickShape, type HookOutput } from './rtk/compress'
+import { compressWithRtk, pickShape, type CompressFailureReason, type HookOutput } from './rtk/compress'
 import { verbOf } from './rtk/rewrite'
 import type { SkipReason } from './stats'
 import { estimateSavedTokens } from './tokens'
@@ -56,6 +56,8 @@ export interface CompressLayerOptions {
   ) => void
   /** Session counters: one call per deliberately skipped result. */
   readonly onSkipped?: (exec: ToolExecution, reason: SkipReason) => void
+  /** Session counters: one call per failed rtk invocation (not a no-op). */
+  readonly onFailed?: (exec: ToolExecution, reason: CompressFailureReason) => void
   /**
    * Called once per result whose content a *downstream* listener already
    * replaced. This is the only reliable, name-free signal that another result
@@ -154,7 +156,7 @@ export function createCompressLayer(options: CompressLayerOptions) {
       if (worthIt) {
         const started = Date.now()
         const cwd = options.cwdOf?.(exec)
-        compressed = await roundTrip({
+        const outcome = await roundTrip({
           binary,
           shape,
           // The REWRITTEN command: rtk's `is_rtk_command` gate reads it to skip
@@ -168,13 +170,24 @@ export function createCompressLayer(options: CompressLayerOptions) {
           ...(cwd === undefined ? {} : { cwd }),
         })
         const elapsed = Date.now() - started
-        // Price both texts instead of the byte delta: a compression that drops
-        // ASCII while keeping CJK saves fewer tokens than its byte count suggests.
-        const savedTokens = estimateSavedTokens(text, compressed?.text ?? text)
-        options.onCompressed?.(exec, text.length, compressed?.text.length ?? text.length, savedTokens, elapsed)
-        options.log?.(
-          `compress ${exec.name}: ${String(text.length)} -> ${String(compressed?.text.length ?? 0)} B in ${String(elapsed)} ms`,
-        )
+        if (outcome.kind === 'ok') {
+          compressed = outcome.output
+          // Price both texts instead of the byte delta: a compression that drops
+          // ASCII while keeping CJK saves fewer tokens than its byte count suggests.
+          const savedTokens = estimateSavedTokens(text, compressed.text)
+          options.onCompressed?.(exec, text.length, compressed.text.length, savedTokens, elapsed)
+          options.log?.(
+            `compress ${exec.name}: ${String(text.length)} -> ${String(compressed.text.length)} B in ${String(elapsed)} ms`,
+          )
+        } else if (outcome.kind === 'noop') {
+          // A cancelled call is a no-op result but not a skipped result; it
+          // must not show up as "no gain" in the session counters.
+          if (exec.signal?.aborted !== true) options.onSkipped?.(exec, 'noop')
+          options.log?.(`compress ${exec.name}: no gain in ${String(elapsed)} ms`)
+        } else {
+          options.onFailed?.(exec, outcome.reason)
+          options.log?.(`compress ${exec.name}: failed (${outcome.reason}) in ${String(elapsed)} ms`)
+        }
       } else if (!inScope) {
         options.onSkipped?.(exec, 'scope')
       } else if (text.length < threshold) {

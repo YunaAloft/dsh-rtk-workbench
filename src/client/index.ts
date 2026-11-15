@@ -14,7 +14,10 @@
  */
 
 import { dictionaries, NS } from './dict'
+import { injectStyles } from './styles'
 import {
+  doctorCollapsedLabel,
+  doctorStamp,
   panelSections,
   pillText,
   pillVisible,
@@ -59,8 +62,21 @@ interface Snapshot {
   error: string | undefined
   open: boolean
   doctor: string | undefined
+  /** Completion time of the last self-check, epoch ms. */
+  doctorAt: number | undefined
+  /** Whether the self-check request itself failed (not whether a line says fail). */
+  doctorFailed: boolean
+  /** Whether the self-check body is expanded inside the overlay. */
+  doctorOpen: boolean
+  doctorCopied: boolean
+  doctorCopyFailed: boolean
+  /** Whether the "how to read this" drawer is open above the overlay. */
+  helpOpen: boolean
   busy: boolean
   copied: boolean
+  copyFailed: boolean
+  sessionCopied: boolean
+  sessionCopyFailed: boolean
   /** Session the pill currently renders for (from the slot's `inject`). */
   currentSessionKey: string | undefined
 }
@@ -70,8 +86,17 @@ const store: Snapshot = {
   error: undefined,
   open: false,
   doctor: undefined,
+  doctorAt: undefined,
+  doctorFailed: false,
+  doctorOpen: false,
+  doctorCopied: false,
+  doctorCopyFailed: false,
+  helpOpen: false,
   busy: false,
   copied: false,
+  copyFailed: false,
+  sessionCopied: false,
+  sessionCopyFailed: false,
   currentSessionKey: undefined,
 }
 const listeners = new Set<() => void>()
@@ -185,81 +210,95 @@ async function runDoctor(): Promise<void> {
     const response = await fetch(doctorUrl(), { method: 'POST', headers: { accept: 'application/json' } })
     if (!response.ok) throw new Error(`HTTP ${String(response.status)}`)
     const body = (await response.json()) as { text?: unknown }
-    patch({ doctor: typeof body.text === 'string' ? body.text : translate('panel.doctorFailed') })
+    const text = typeof body.text === 'string' ? body.text : translate('panel.doctorFailed')
+    patch({
+      doctor: text,
+      doctorAt: Date.now(),
+      doctorFailed: typeof body.text !== 'string',
+      // The user explicitly asked for this run: show the result immediately.
+      doctorOpen: true,
+      doctorCopied: false,
+      doctorCopyFailed: false,
+    })
   } catch (error) {
-    patch({ doctor: error instanceof Error ? error.message : translate('panel.doctorFailed') })
+    patch({
+      doctor: error instanceof Error ? error.message : translate('panel.doctorFailed'),
+      doctorAt: Date.now(),
+      doctorFailed: true,
+      // A failure needs to be visible too; silence here looks like a no-op.
+      doctorOpen: true,
+      doctorCopied: false,
+      doctorCopyFailed: false,
+    })
   } finally {
     patch({ busy: false })
   }
 }
 
+/** Drop the last self-check result without touching the status snapshot. */
+function clearDoctor(): void {
+  patch({
+    doctor: undefined,
+    doctorAt: undefined,
+    doctorFailed: false,
+    doctorOpen: false,
+    doctorCopied: false,
+    doctorCopyFailed: false,
+  })
+}
+
+/** Copy the collapsed self-check with its timestamp as the first line. */
+async function copyDoctor(): Promise<void> {
+  const { doctor, doctorAt } = store
+  if (doctor === undefined || doctorAt === undefined) return
+  const text = `${doctorStamp(translate, doctorAt)}\n${doctor}`
+  try {
+    await navigator.clipboard.writeText(text)
+    patch({ doctorCopied: true, doctorCopyFailed: false })
+    setTimeout(() => {
+      patch({ doctorCopied: false })
+    }, 1500)
+  } catch {
+    patch({ doctorCopied: false, doctorCopyFailed: true })
+    setTimeout(() => {
+      patch({ doctorCopyFailed: false })
+    }, 1500)
+  }
+}
+
+/** Copy the full current session id for a bug report. */
+async function copySessionKey(): Promise<void> {
+  const key = store.currentSessionKey
+  if (key === undefined || key === '') return
+  try {
+    await navigator.clipboard.writeText(key)
+    patch({ sessionCopied: true, sessionCopyFailed: false })
+    setTimeout(() => {
+      patch({ sessionCopied: false })
+    }, 1500)
+  } catch {
+    patch({ sessionCopied: false, sessionCopyFailed: true })
+    setTimeout(() => {
+      patch({ sessionCopyFailed: false })
+    }, 1500)
+  }
+}
+
 /** Copy the last status document for a bug report. */
-async function copyDiagnostics(): Promise<void> {
+async function copyStatus(): Promise<void> {
   try {
     const text = JSON.stringify(store.view ?? { error: store.error ?? 'no data' }, null, 2)
     await navigator.clipboard.writeText(text)
-    patch({ copied: true })
+    patch({ copied: true, copyFailed: false })
     setTimeout(() => {
       patch({ copied: false })
     }, 1500)
   } catch {
-    patch({ copied: false })
+    patch({ copied: false, copyFailed: true })
+    setTimeout(() => {
+      patch({ copyFailed: false })
+    }, 1500)
   }
-}
-
-const CSS = `
-.rtkw-pill{display:inline-flex;align-items:center;gap:6px;border:none;background:transparent;color:var(--dsw-alias-label-tertiary);border-radius:var(--dsw-radius-sm);padding:1px 8px;font-size:12px;line-height:18px;cursor:pointer;min-width:0;max-width:min(340px,100%);overflow:hidden}
-.rtkw-pill:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.rtkw-pill:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
-.rtkw-pill:not([data-split]){flex-shrink:0}
-.rtkw-icon{width:14px;height:14px;flex:none;color:var(--dsw-alias-label-tertiary);fill:currentColor}
-.rtkw-dot{width:6px;height:6px;flex:none;border-radius:50%;background:var(--dsw-alias-state-success-primary)}
-.rtkw-warn .rtkw-dot{background:var(--dsw-alias-state-warn-primary)}
-.rtkw-off .rtkw-dot{background:var(--dsw-alias-state-idle-primary)}
-.rtkw-primary{display:inline-flex;align-items:center;min-width:0;overflow:hidden;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary)}
-.rtkw-saved{min-width:0;overflow:hidden;text-overflow:ellipsis}
-.rtkw-sep{flex:none;color:var(--dsw-alias-label-tertiary)}
-.rtkw-pct{flex:none}
-.rtkw-secondary{color:var(--dsw-alias-label-tertiary);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-@media (max-width:767px){.rtkw-secondary{display:none}}
-@media (max-width:480px){.rtkw-sep,.rtkw-pct{display:none}}
-@media (max-width:360px){.rtkw-pill[data-split] .rtkw-primary{display:none}}
-.rtkw-overlay{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-end;justify-content:center;background:var(--dsw-alias-bg-mask-1);padding:24px}
-.rtkw-panel{width:min(640px,100%);max-height:min(70vh,720px);overflow:auto;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);border:1px solid var(--dsw-alias-border-l2);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.18);padding:16px;font-size:13px}
-.rtkw-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
-.rtkw-close{border:none;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:14px;padding:4px 8px;border-radius:6px}
-.rtkw-close:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.rtkw-section{margin:12px 0 0;padding-top:10px;border-top:1px solid var(--dsw-alias-border-l2)}
-.rtkw-section h4{font-size:12px;font-weight:600;color:var(--dsw-alias-label-secondary);margin:0 0 6px;text-transform:none}
-.rtkw-row{display:flex;justify-content:space-between;gap:16px;padding:2px 0}
-.rtkw-row dt{color:var(--dsw-alias-label-tertiary);min-width:88px}
-.rtkw-row dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-primary)}
-.rtkw-row dd.rtkw-warn{color:var(--dsw-alias-state-warn-primary)}
-.rtkw-row dd.rtkw-ok{color:var(--dsw-alias-state-success-primary)}
-.rtkw-note{margin:6px 0 0;color:var(--dsw-alias-label-tertiary);font-size:12px}
-.rtkw-foot{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:14px;padding-top:10px;border-top:1px solid var(--dsw-alias-border-l2)}
-.rtkw-action{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer}
-.rtkw-action:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.rtkw-action:disabled{opacity:.6;cursor:default}
-.rtkw-fine{flex:1 1 100%;margin:6px 0 0;color:var(--dsw-alias-label-caption);font-size:11px}
-.rtkw-doctor{margin:8px 0 0;padding:8px;border-radius:8px;background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-secondary);font-size:11px;white-space:pre-wrap;max-height:200px;overflow:auto}
-`
-
-let stylesInjected = false
-
-/** Inject the stylesheet once; component-local styles would flicker on remount. */
-function injectStyles(): void {
-  if (stylesInjected || typeof document === 'undefined') return
-  const id = 'rtk-workbench-styles'
-  if (document.getElementById(id) !== null) {
-    stylesInjected = true
-    return
-  }
-  const style = document.createElement('style')
-  style.id = id
-  style.textContent = CSS
-  document.head.appendChild(style)
-  stylesInjected = true
 }
 
 function pickTranslate(props: unknown): Translate {
@@ -310,7 +349,7 @@ function createClientPlugin(require: (id: string) => unknown): {
         'aria-haspopup': 'dialog',
         'aria-expanded': snapshot.open ? 'true' : 'false',
         ...(split === undefined ? {} : { 'data-split': 'true' }),
-        onClick: () => patch({ open: true }),
+        onClick: () => patch({ open: true, doctorOpen: false, helpOpen: false }),
       },
       ...element([
         h(
@@ -327,7 +366,7 @@ function createClientPlugin(require: (id: string) => unknown): {
               'span',
               { className: 'rtkw-primary' },
               h('span', { className: 'rtkw-saved' }, split.saved),
-              h('span', { className: 'rtkw-sep' }, ` ${split.separator} `),
+              h('span', { className: 'rtkw-sep' }, split.separator),
               h('span', { className: 'rtkw-pct' }, split.reduction),
             ),
         text.secondary === '' ? null : h('span', { className: 'rtkw-secondary' }, text.secondary),
@@ -347,23 +386,232 @@ function createClientPlugin(require: (id: string) => unknown): {
   function Panel(props: unknown): unknown {
     const snapshot = useSnapshot()
     const t = pickTranslate(props)
+    const closePanel = (): void => patch({ open: false, doctorOpen: false, helpOpen: false })
     React.useEffect(() => {
       if (!snapshot.open) return
       const onKey = (event: KeyboardEvent): void => {
-        if (event.key === 'Escape') patch({ open: false })
+        if (event.key !== 'Escape') return
+        if (snapshot.helpOpen) {
+          patch({ helpOpen: false })
+        } else {
+          closePanel()
+        }
       }
       document.addEventListener('keydown', onKey)
       return () => document.removeEventListener('keydown', onKey)
-    }, [snapshot.open])
+    }, [snapshot.open, snapshot.helpOpen])
     if (!snapshot.open) return null
+
     const sections = panelSections(snapshot.view, snapshot.error, t, snapshot.currentSessionKey)
+    const scrollToDiagnostics = (): void => {
+      document.getElementById('rtkw-diagnostics')?.scrollIntoView({ block: 'start' })
+    }
+    const sectionNode = (section: (typeof sections)[number], index: number): unknown =>
+      h(
+        'section',
+        { className: 'rtkw-section', key: section.title },
+        ...element([
+          h('h4', null, section.title),
+          section.rows.length === 0 ? null : h('dl', null, ...section.rows.map((entry, rowIndex) => row(t, entry, rowIndex))),
+          section.note === undefined ? null : h('p', { className: 'rtkw-note' }, section.note),
+          index === 0
+            ? h(
+                'button',
+                { type: 'button', className: 'rtkw-shortcut', onClick: scrollToDiagnostics },
+                t('panel.diagnosticsShortcut'),
+              )
+            : null,
+        ]),
+      )
+
+    const doctorActions = h(
+      'div',
+      { className: 'rtkw-actions' },
+      h(
+        'button',
+        {
+          type: 'button',
+          className: 'rtkw-action',
+          disabled: snapshot.busy,
+          'aria-busy': snapshot.busy ? 'true' : 'false',
+          onClick: () => {
+            void runDoctor()
+          },
+        },
+        snapshot.busy ? t('panel.doctorRunning') : t('panel.doctor'),
+      ),
+      h(
+        'button',
+        {
+          type: 'button',
+          className: 'rtkw-action',
+          disabled: snapshot.doctor === undefined,
+          onClick: clearDoctor,
+        },
+        t('panel.clearDoctor'),
+      ),
+      h(
+        'button',
+        {
+          type: 'button',
+          className: 'rtkw-action',
+          disabled: snapshot.doctor === undefined,
+          onClick: () => {
+            void copyDoctor()
+          },
+        },
+        snapshot.doctorCopied
+          ? t('panel.copied')
+          : snapshot.doctorCopyFailed
+            ? t('panel.copyFailed')
+            : t('panel.copyDoctor'),
+      ),
+    )
+
+    const diagnostics = h(
+      'section',
+      { className: 'rtkw-section', key: 'diagnostics', id: 'rtkw-diagnostics' },
+      ...element([
+        h('h4', null, t('panel.sectionDiagnostics')),
+        snapshot.doctor === undefined || snapshot.doctorAt === undefined
+          ? null
+          : h(
+              'button',
+              {
+                type: 'button',
+                className: 'rtkw-doctor-toggle',
+                'aria-expanded': snapshot.doctorOpen ? 'true' : 'false',
+                onClick: () => patch({ doctorOpen: !snapshot.doctorOpen }),
+              },
+              `${snapshot.doctorOpen ? '▾' : '▸'} ${doctorCollapsedLabel(t, snapshot.doctorAt, snapshot.doctorFailed)}`,
+            ),
+        doctorActions,
+        snapshot.busy
+          ? h('p', { className: 'rtkw-hint', role: 'status' }, t('panel.doctorRunningHint'))
+          : null,
+        snapshot.doctor === undefined || !snapshot.doctorOpen
+          ? null
+          : h('pre', { className: 'rtkw-doctor' }, snapshot.doctor),
+      ]),
+    )
+
+    const feedback = h(
+      'section',
+      { className: 'rtkw-section', key: 'feedback' },
+      ...element([
+        h('h4', null, t('panel.sectionFeedback')),
+        h(
+          'p',
+          { className: 'rtkw-session' },
+          `${t('panel.currentSession')}: `,
+          h('code', null, snapshot.currentSessionKey ?? '—'),
+        ),
+        h(
+          'div',
+          { className: 'rtkw-actions' },
+          h(
+            'button',
+            {
+              type: 'button',
+              className: 'rtkw-action',
+              onClick: () => {
+                void copyStatus()
+              },
+            },
+            snapshot.copied
+              ? t('panel.copied')
+              : snapshot.copyFailed
+                ? t('panel.copyFailed')
+                : t('panel.copy'),
+          ),
+          h(
+            'button',
+            {
+              type: 'button',
+              className: 'rtkw-action',
+              disabled: snapshot.currentSessionKey === undefined || snapshot.currentSessionKey === '',
+              onClick: () => {
+                void copySessionKey()
+              },
+            },
+            snapshot.sessionCopied
+              ? t('panel.copied')
+              : snapshot.sessionCopyFailed
+                ? t('panel.copyFailed')
+                : t('panel.copySession'),
+          ),
+        ),
+        h('p', { className: 'rtkw-hint' }, t('panel.copyHint')),
+        h(
+          'button',
+          { type: 'button', className: 'rtkw-link', onClick: () => patch({ helpOpen: true }) },
+          t('panel.help'),
+        ),
+      ]),
+    )
+
+    const helpBlock = (title: string, body: string): unknown =>
+      h(
+        'section',
+        { className: 'rtkw-section' },
+        h('h4', null, title),
+        h('p', { className: 'rtkw-note' }, body),
+      )
+
+    const help = snapshot.helpOpen
+      ? h(
+          'div',
+          {
+            className: 'rtkw-overlay rtkw-help-overlay',
+            role: 'presentation',
+            onClick: (event: { target: unknown; currentTarget: unknown }) => {
+              if (event.target === event.currentTarget) patch({ helpOpen: false })
+            },
+          },
+          h(
+            'div',
+            {
+              className: 'rtkw-panel rtkw-help',
+              role: 'dialog',
+              'aria-modal': 'true',
+              'aria-label': t('panel.helpTitle'),
+            },
+            ...element([
+              h(
+                'header',
+                { className: 'rtkw-head' },
+                h('strong', null, t('panel.helpTitle')),
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    className: 'rtkw-close',
+                    'aria-label': t('panel.close'),
+                    onClick: () => patch({ helpOpen: false }),
+                  },
+                  '✕',
+                ),
+              ),
+              helpBlock(t('panel.helpCheckTitle'), t('panel.helpCheck')),
+              helpBlock(t('panel.helpJsonTitle'), t('panel.helpJson')),
+              helpBlock(t('panel.helpFailuresTitle'), t('panel.helpFailures')),
+              h('p', { className: 'rtkw-fine' }, t('panel.helpClosing')),
+            ]),
+          ),
+        )
+      : null
+
+    // Numbers first and together: health, session, lifetime, by-tool and recent
+    // events. Diagnostics and export are utilities at the bottom; the health
+    // section carries a shortcut that scrolls down to them.
+    const sectionNodes = sections.map((section, index) => sectionNode(section, index))
     return h(
       'div',
       {
         className: 'rtkw-overlay',
         role: 'presentation',
         onClick: (event: { target: unknown; currentTarget: unknown }) => {
-          if (event.target === event.currentTarget) patch({ open: false })
+          if (event.target === event.currentTarget) closePanel()
         },
       },
       h(
@@ -376,52 +624,22 @@ function createClientPlugin(require: (id: string) => unknown): {
             h('strong', null, t('panel.title')),
             h(
               'button',
-              { type: 'button', className: 'rtkw-close', 'aria-label': t('panel.close'), onClick: () => patch({ open: false }) },
+              {
+                type: 'button',
+                className: 'rtkw-close',
+                'aria-label': t('panel.close'),
+                onClick: closePanel,
+              },
               '✕',
             ),
           ),
-          ...sections.map((section) =>
-            h(
-              'section',
-              { className: 'rtkw-section', key: section.title },
-              ...element([
-                h('h4', null, section.title),
-                section.rows.length === 0 ? null : h('dl', null, ...section.rows.map((entry, index) => row(t, entry, index))),
-                section.note === undefined ? null : h('p', { className: 'rtkw-note' }, section.note),
-              ]),
-            ),
-          ),
-          snapshot.doctor === undefined ? null : h('pre', { className: 'rtkw-doctor' }, snapshot.doctor),
-          h(
-            'footer',
-            { className: 'rtkw-foot' },
-            h(
-              'button',
-              {
-                type: 'button',
-                className: 'rtkw-action',
-                disabled: snapshot.busy,
-                onClick: () => {
-                  void runDoctor()
-                },
-              },
-              t('panel.doctor'),
-            ),
-            h(
-              'button',
-              {
-                type: 'button',
-                className: 'rtkw-action',
-                onClick: () => {
-                  void copyDiagnostics()
-                },
-              },
-              snapshot.copied ? t('panel.copied') : t('panel.copy'),
-            ),
-            h('p', { className: 'rtkw-fine' }, t('panel.footnote')),
-          ),
+          ...sectionNodes,
+          diagnostics,
+          feedback,
+          h('p', { className: 'rtkw-fine' }, t('panel.footnote')),
         ]),
       ),
+      help,
     )
   }
 

@@ -27,6 +27,8 @@ export interface BinaryInfo {
 export interface ProbeInfo {
   readonly state: 'unknown' | 'ok' | 'fail'
   readonly detail: string
+  /** A probe (first attempt or retry) is currently running. */
+  readonly probing: boolean
 }
 
 /** Which pipeline runs and whether it is healthy. */

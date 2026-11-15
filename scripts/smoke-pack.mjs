@@ -63,11 +63,19 @@ try {
   for (const relative of [
     'docs/reference.md',
     'docs/reference.en.md',
+    'docs/DETAIL.md',
+    'docs/DETAIL.zh.md',
+    'docs/preview.png',
+    'docs/preview.zh.png',
     'CHANGELOG.md',
     'README.en.md',
   ]) {
     check(existsSync(join(root, relative)), `${relative} is packed`)
   }
+  check(
+    !existsSync(join(root, 'docs/readme/banner.png')),
+    'docs/readme/banner.png is not packed',
+  )
 
   // The host half imports its peer dependency (`@deepseek-ai/schemastery`) as a
   // bare specifier; a profile provides it. Outside a profile we link the copy the
@@ -129,7 +137,13 @@ try {
 } finally {
   delete globalThis.window
   delete globalThis.document
-  rmSync(directory, { recursive: true, force: true })
+  try {
+    rmSync(directory, { recursive: true, force: true })
+  } catch {
+    // Windows can still hold a loaded module under the temp directory. The
+    // checks already ran; leaving one temp dir behind is not a gate failure.
+    console.warn(`smoke-pack: could not remove ${directory}`)
+  }
 }
 
 if (failures.length > 0) {
