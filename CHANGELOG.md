@@ -2,6 +2,28 @@
 
 All notable changes to `dsh-rtk-workbench`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] — 2026-11-15
+
+Makes the overlay explain itself, gives the plugin page a real preview image, and stops counting an rtk no-op as a compression. This release also fixes the stale-stylesheet bug from #17.
+
+### Added
+
+- The overlay now has separate **Diagnostics** and **Feedback & export** blocks. Diagnostics records when the self-check ran, starts collapsed, expands to the full text, and can be cleared or copied with a `Checked at …` first line. Feedback copies the status JSON, explains what it is for, and opens a self-contained "How to read this?" drawer covering the self-check, the status JSON, and common failures.
+- The plugin detail page now shows a single feature preview per UI language. `locale/*.json` points `meta.detail` at `docs/DETAIL.md` / `docs/DETAIL.zh.md`, each referencing a 1280×600 (2×) PNG. The README fallback, which dropped raw HTML images and showed Chinese text in the English UI, is no longer used for the detail page.
+- A repository-owned `scripts/check-preview.mjs` runs in CI and verifies the PNG pair, both DETAIL documents, `meta.detail`, and `package.json#files`; `smoke-pack` verifies the four files in both tarball shapes and that the README banner is not shipped.
+
+### Changed
+
+- Status/session copy now uses `RTK` for the product and `rtk` for commands and binaries. The unreachable status route and the failed binary probe get distinct first lines: `RTK 状态不可达` / `RTK unreachable` versus `RTK 不可用` / `RTK unusable`.
+- The diagnostics action is now `复制状态 JSON` / `Copy status JSON`, with a usage hint below it and a visible `复制失败` / `Copy failed` state when the clipboard rejects the write.
+- Skip reasons are displayed with labels (too small, file/search, already marked, payload too large, passive tool, no gain) while the JSON and `/rtk stats` keep the raw keys. The session block explains a zero saving when rewrites happened but compression had nothing left to do.
+- The pill separator matches the host's readings: 6px on each side and `separator-primary`. The `/rtk` ghost hint is now the short `help · status · on/off <switch>`.
+
+### Fixed
+
+- An in-place plugin update refreshed the new JavaScript but kept the old `<style>` element, leaving new markup with stale CSS: the icon rendered at its intrinsic 300×150 and the pill lost its frame. The client now replaces the existing stylesheet's contents instead of returning early (#17).
+- An rtk invocation that returned nothing useful no longer increments `compressions` while leaving `in == out` and `savedTokens == 0`. Only a real `ok` result is counted; a normal `noop` is recorded under `skipped`, and spawn/timeout/exit/payload/parse failures are recorded under `errors`.
+
 ## [1.1.2] — 2026-11-14
 
 Fixes the mobile composer-dock layout reported in #15, matches the pill to the host's dock readings, keeps the pill switch across restarts (#14), and keeps this conversation's counters after a restart.
