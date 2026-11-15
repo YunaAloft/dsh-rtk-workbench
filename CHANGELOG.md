@@ -2,7 +2,7 @@
 
 All notable changes to `dsh-rtk-workbench`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.2.0] — 2026-11-15
 
 Makes the overlay explain itself, gives the plugin page a real preview image, and stops counting an rtk no-op as a compression. This update also fixes the stale-stylesheet bug from #17 and avoids a false "unusable" flash on a slow first probe.
 

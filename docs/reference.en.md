@@ -1,6 +1,6 @@
 # dsh-rtk-workbench reference
 
-> This document tracks the main development line (1.2.0 in development); the published version is whatever npm / the GitHub tag says.
+> This document covers 1.2.0; the published version is whatever npm / the GitHub tag says.
 
 Applies to DSH `0.2.2-rc.3` (`dshTarget`; the `0.2.x` line is compatible), rtk `1.2.0`, Node `^22.19.0 || >=24`. Restart `dsh web` after installing — a bundle change is not a page refresh.
 
@@ -119,7 +119,7 @@ Every key can be overridden from `cordis.patch.yml`; values are validated at loa
 
 | Host | rtk | Checked | Evidence | Notes |
 |---|---|---|---|---|
-| `0.2.2-rc.3` | `1.2.0` | 2026-11-15 | typecheck + 256 tests + build + manifest/docs/preview + `verify-host`; `0.2.2-rc.3` / `0.2.1-rc.5` dual baseline; npm main and Windows fat tarball `smoke-pack` | 1.2.0 in development (not released) |
+| `0.2.2-rc.3` | `1.2.0` | 2026-11-15 | typecheck + 256 tests + build + manifest/docs/preview + `verify-host`; `0.2.2-rc.3` / `0.2.1-rc.5` dual baseline; npm main and Windows fat tarball `smoke-pack` | 1.2.0 (released 2026-11-15) |
 | `0.2.2-rc.3` | `1.2.0` | 2026-11-14 | typecheck + 235 tests + build + manifest/docs + `verify-host`; Windows x64 and Linux arm64 (dsh-go) acceptance | 1.1.2 |
 | `0.2.2-rc.1` | `1.2.0` | 2026-11-13 | typecheck + 225 tests + build + manifest/docs + `verify-host`; web profile acceptance | 1.1.1 |
 | `0.2.2-rc.1` | `1.2.0` | 2026-11-12 | typecheck + 220 tests; `build-vendor` on 5 platforms + checksums; benchmark re-run | 1.1.0 |
