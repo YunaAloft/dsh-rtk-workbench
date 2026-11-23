@@ -13,7 +13,7 @@ body:
     attributes:
       label: DSH 版本（必填）
       description: 运行 `dsh --version` 得到的输出
-      placeholder: 例如：0.2.2-rc.3
+      placeholder: 例如：0.2.2-rc.5
     validations:
       required: true
 
@@ -22,7 +22,7 @@ body:
     attributes:
       label: 插件版本（必填）
       description: 插件管理器里显示的版本号
-      placeholder: 例如：1.1.2
+      placeholder: 例如：1.3.0
     validations:
       required: true
 

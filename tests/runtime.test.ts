@@ -94,4 +94,17 @@ describe('runRtk working directory', () => {
       rmSync(directory, { recursive: true, force: true })
     }
   })
+
+  it('turns telemetry off for every rtk child without mutating the caller environment', async () => {
+    const env = { FOO: 'bar' }
+    const run = await runRtk(
+      process.execPath,
+      ['-e', 'process.stdout.write(process.env.RTK_TELEMETRY_DISABLED ?? "")'],
+      { env, timeoutMs: 10_000 },
+    )
+    expect(run.failure).toBeUndefined()
+    expect(run.code).toBe(0)
+    expect(run.stdout).toBe('1')
+    expect(env).toEqual({ FOO: 'bar' })
+  })
 })

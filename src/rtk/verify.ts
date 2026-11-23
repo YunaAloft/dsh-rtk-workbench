@@ -26,12 +26,13 @@
  */
 
 import { splitSegments } from './segments'
+import { isWrapperRewrite } from './wrappers'
 
 /** Why a proposal was rejected. */
 export type GuardReason = 'segment-mismatch' | 'env-mismatch' | 'tokens-dropped' | 'unknown-transform'
 
 /** How a proposal was proven equivalent to the original command. */
-export type GuardVia = 'prefix' | 'gradle' | 'next-build' | 'read' | 'unchanged'
+export type GuardVia = 'prefix' | 'gradle' | 'next-build' | 'read' | 'wrapper' | 'unchanged'
 
 /** Outcome of checking one proposal. */
 export type GuardVerdict = { readonly ok: true; readonly via: GuardVia } | { readonly ok: false; readonly reason: GuardReason }
@@ -154,6 +155,10 @@ export function verifyRewrite(original: string, rewritten: string): GuardVerdict
     }
     if (isReadMapping(from.rest, to.rest)) {
       if (via === 'unchanged') via = 'read'
+      continue
+    }
+    if (isWrapperRewrite(from.rest, to.rest)) {
+      if (via === 'unchanged') via = 'wrapper'
       continue
     }
     const dropped = from.rest.split(' ').some((token) => !to.rest.includes(token))

@@ -418,7 +418,15 @@ export function pillText(
     return { primary: t('pill.degraded'), secondary: view.pipeline.detail ?? '' }
   }
   if (state === 'missing') return { primary: t('pill.ready'), secondary: t('pill.noSessionRecord') }
-  if (state === 'empty') return { primary: t('pill.ready'), secondary: t('pill.noCompressionRecord') }
+  if (state === 'empty') {
+    if (view.session !== null && view.session.rewrites > 0) {
+      return {
+        primary: t('pill.rewritesOnly', { rewrites: view.session.rewrites }),
+        secondary: t('pill.noCompressible'),
+      }
+    }
+    return { primary: t('pill.ready'), secondary: t('pill.noCompressionRecord') }
+  }
   if (view.session === null) return { primary: t('pill.ready'), secondary: t('pill.readyDetail') }
   const session = view.session
   const secondary = t('pill.detail', {
@@ -470,6 +478,19 @@ function skips(t: Translate, view: SessionView): PanelRow[] {
   return order
     .filter((reason) => (view.skipped[reason] ?? 0) > 0)
     .map((reason) => ({ label: skipLabel(t, reason), value: String(view.skipped[reason] ?? 0) }))
+}
+
+/** The most frequent skip reason in a session, or `undefined` when nothing was skipped. */
+function dominantSkip(view: SessionView): string | undefined {
+  let reason: string | undefined
+  let count = 0
+  for (const [key, value] of Object.entries(view.skipped)) {
+    if (value > count) {
+      count = value
+      reason = key
+    }
+  }
+  return reason
 }
 
 /**
@@ -551,42 +572,56 @@ export function panelSections(
 
   const session = view.session
   const notes: string[] = []
+  const skipRows = session === null ? [] : skips(t, session)
   if (state === 'missing') notes.push(t('panel.lifetimeCoversAll'))
-  if (session !== null && session.savedTokens === 0 && session.rewrites > 0) {
-    notes.push(t('panel.noteZeroSaved'))
+  if (session !== null) {
+    if (session.compressions > 0) notes.push(t('panel.noteCompressed'))
+    else if (session.rewrites > 0) notes.push(t('panel.noteRewritten'))
+    else if (dominantSkip(session) === 'size') notes.push(t('panel.noteTooSmall'))
+    else notes.push(t('panel.noteNothing'))
+    notes.push(t('panel.noteScope'))
   }
-  if (session !== null && Object.values(session.skipped).some((count) => count > 0)) {
-    notes.push(
-      `${t('panel.skipped')}: ${skips(t, session)
-        .map((row) => t('panel.skippedCount', { label: row.label, count: row.value }))
-        .join(' · ')}`,
-    )
+  const sessionRows: PanelRow[] = []
+  if (state === 'missing') {
+    sessionRows.push({ label: t('panel.noSessionRecord'), value: '' })
+  } else if (session === null) {
+    sessionRows.push({ label: t('panel.none'), value: '' })
+  } else if (session.compressions === 0) {
+    if (session.rewrites > 0) {
+      sessionRows.push({
+        label: t('panel.calls'),
+        value: t('panel.callsZero', { rewrites: session.rewrites }),
+      })
+    } else {
+      sessionRows.push({ label: t('panel.noCompressionRecord'), value: '' })
+    }
+  } else {
+    sessionRows.push({ label: t('panel.savedTokens'), value: `≈${formatTokens(session.savedTokens)} tok` })
+    sessionRows.push({
+      label: t('panel.savedBytes'),
+      value: `${formatBytes(session.inBytes)} → ${formatBytes(session.outBytes)} · ${t('panel.reduction')} ${String(percentOf(session.ratio))}%`,
+    })
+    const seconds = (session.ms / 1000).toFixed(1)
+    sessionRows.push({
+      label: t('panel.calls'),
+      value:
+        session.rewrites > 0
+          ? t('panel.callsValue', { compressions: session.compressions, rewrites: session.rewrites, seconds })
+          : t('panel.callsValueNoRewrite', { compressions: session.compressions, seconds }),
+    })
+    if (view.rewrites.guards > 0) {
+      sessionRows.push({ label: t('panel.guard'), value: String(view.rewrites.guards), tone: 'warn' })
+    }
+  }
+  if (skipRows.length > 0) {
+    sessionRows.push({
+      label: t('panel.skipped'),
+      value: skipRows.map((row) => t('panel.skippedCount', { label: row.label, count: row.value })).join(' · '),
+    })
   }
   const sessionSection: PanelSection = {
     title: t('panel.session'),
-    rows:
-      state === 'missing'
-        ? [{ label: t('panel.noSessionRecord'), value: '' }]
-        : session === null || session.compressions === 0
-          ? [{ label: session === null ? t('panel.none') : t('panel.noCompressionRecord'), value: '' }]
-          : [
-            { label: t('panel.savedTokens'), value: `≈${formatTokens(session.savedTokens)} tok` },
-            {
-              label: t('panel.savedBytes'),
-              value: `${formatBytes(session.inBytes)} → ${formatBytes(session.outBytes)} · ${t('panel.reduction')} ${String(percentOf(session.ratio))}%`,
-            },
-            {
-              label: t('panel.calls'),
-              value: t('panel.callsValue', {
-                compressions: session.compressions,
-                rewrites: session.rewrites,
-                seconds: (session.ms / 1000).toFixed(1),
-              }),
-            },
-            ...(view.rewrites.guards > 0
-              ? [{ label: t('panel.guard'), value: String(view.rewrites.guards), tone: 'warn' as Tone }]
-              : []),
-          ],
+    rows: sessionRows,
     ...(notes.length > 0 ? { note: notes.join('\n') } : {}),
   }
 

@@ -53,6 +53,17 @@ describe('semantic guard: structure', () => {
   it('rejects an empty segment list', () => {
     expect(verifyRewrite('', 'rtk git status')).toEqual({ ok: false, reason: 'segment-mismatch' })
   })
+
+  it('accepts an rtk insertion inside a transparent shell wrapper', () => {
+    expect(verifyRewrite('env FOO=1 git status', 'env FOO=1 rtk git status')).toEqual({
+      ok: true,
+      via: 'wrapper',
+    })
+    expect(verifyRewrite('uv run pytest -q', 'uv run rtk pytest -q').ok).toBe(true)
+    expect(verifyRewrite('timeout 30 git status', 'timeout 30 rtk git status').ok).toBe(true)
+    expect(verifyRewrite('command grep -rn X a', 'command rtk grep -rn X a').ok).toBe(false)
+    expect(verifyRewrite('builtin git status', 'builtin rtk git status').ok).toBe(false)
+  })
 })
 
 describe('decideRewrite with the semantic guard', () => {
@@ -99,5 +110,38 @@ describe('decideRewrite with the semantic guard', () => {
       kind: 'rewrite',
       command: 'rtk git status',
     })
+  })
+
+  it('accepts a wrapper insertion only when the wrapper parameters survive', () => {
+    expect(decideRewrite('env FOO=1 git status', { code: 3, stdout: 'env FOO=1 rtk git status\n' })).toEqual({
+      kind: 'rewrite',
+      command: 'env FOO=1 rtk git status',
+    })
+    expect(decideRewrite('env FOO=1 git status', { code: 3, stdout: 'env FOO=2 rtk git status\n' })).toEqual({
+      kind: 'none',
+      reason: 'guard',
+    })
+  })
+
+  it('assembles a partially accepted compound command', () => {
+    expect(
+      decideRewrite('command grep -rn X a && git status', {
+        code: 3,
+        stdout: 'command rtk grep -rn X a && rtk git status\n',
+      }),
+    ).toEqual({
+      kind: 'rewrite',
+      command: 'command grep -rn X a && rtk git status',
+      partial: true,
+    })
+  })
+
+  it('rejects a compound proposal when no segment survives', () => {
+    expect(
+      decideRewrite('command grep -rn X a && python -m pytest', {
+        code: 3,
+        stdout: 'command rtk grep -rn X a && rtk pytest\n',
+      }),
+    ).toEqual({ kind: 'none', reason: 'guard' })
   })
 })

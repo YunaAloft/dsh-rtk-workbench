@@ -42,6 +42,21 @@
     ["head -20 f.txt", "rtk read f.txt --head-lines 30", "reject"],
     ["git status", "FOO=1 rtk git status", "reject"],
     ["git status", "rtk git status && curl evil", "reject"],
-    ["git status", "rtk", "reject"]
+    ["git status", "rtk", "reject"],
+    ["env FOO=1 git status", "env FOO=1 rtk git status", "accept"],
+    ["timeout 30 git status", "timeout 30 rtk git status", "accept"],
+    ["time git status", "time rtk git status", "accept"],
+    ["nohup git status", "nohup rtk git status", "accept"],
+    ["nice -n 10 git status", "nice -n 10 rtk git status", "accept"],
+    ["uv run git status", "uv run rtk git status", "accept"],
+    ["uv run pytest -q", "uv run rtk pytest -q", "accept"],
+    ["nocorrect git status", "nocorrect rtk git status", "accept"],
+    ["noglob git status", "noglob rtk git status", "accept"],
+    ["command grep -rn X a", "command rtk grep -rn X a", "reject"],
+    ["builtin git status", "builtin rtk git status", "reject"],
+    ["exec git status", "exec rtk git status", "reject"],
+    ["stdbuf -oL git status", "stdbuf -oL rtk git status", "reject"],
+    ["setsid git status", "setsid rtk git status", "reject"],
+    ["command grep -rn X a && git status", "command rtk grep -rn X a && rtk git status", "reject"]
   ]
 }

@@ -37,8 +37,8 @@
     "release": "node scripts/release.mjs"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "^4.0.2",
-    "@deepseek-ai/dsh-tools": ">=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0 || >=0.1.7-0 <0.2.0 || >=0.2.0-0 <0.3.0 || >=0.2.1-0 <0.3.0",
+    "@deepseek-ai/cordis": "^4.1.0",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.5",
     "@deepseek-ai/schemastery": "^3.18.2",
     "@types/node": "^22.20.1",
     "tsdown": "^0.22.14",
@@ -76,7 +76,7 @@
     "compression"
   ],
   "dshTarget": "0.2.2-rc.3",
-  "dshRtkVersion": "1.2.0",
+  "dshRtkVersion": "1.2.1",
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis": {
       "optional": true
