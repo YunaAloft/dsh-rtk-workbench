@@ -24,6 +24,15 @@ describe('isRtkInvocation', () => {
     expect(isRtkInvocation('myrtk git status')).toBe(false)
     expect(isRtkInvocation('echo rtk')).toBe(false)
   })
+
+  it('sees an rtk binary inside a transparent wrapper', () => {
+    expect(isRtkInvocation('env FOO=1 rtk git status')).toBe(true)
+    expect(isRtkInvocation('uv run rtk pytest -q')).toBe(true)
+    expect(isRtkInvocation('timeout 30 rtk git status')).toBe(true)
+    expect(isRtkInvocation('nocorrect rtk git status')).toBe(true)
+    expect(isRtkInvocation('env FOO=1 git status')).toBe(false)
+    expect(isRtkInvocation('uv run git status')).toBe(false)
+  })
 })
 
 describe('pre-filter recursion guard', () => {
@@ -44,6 +53,15 @@ describe('pre-filter recursion guard', () => {
   it('still defers on env-prefixed builtins and excluded commands', () => {
     expect(isWorthRewriting('FOO=1 cd /tmp && echo hi')).toBe(false)
     expect(isWorthRewriting('FOO=1 cat big.log', 'posix', new Set(['cat']))).toBe(false)
+  })
+
+  it('skips command/builtin/exec segments but keeps the rest of the line eligible', () => {
+    expect(isWorthRewriting('command grep -rn X a')).toBe(false)
+    expect(isWorthRewriting('builtin git status')).toBe(false)
+    expect(isWorthRewriting('exec git status')).toBe(false)
+    expect(isWorthRewriting('command grep -rn X a && git status')).toBe(true)
+    expect(isWorthRewriting('env FOO=1 rtk git status')).toBe(false)
+    expect(isWorthRewriting('env FOO=1 git status')).toBe(true)
   })
 })
 

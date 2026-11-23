@@ -1,6 +1,7 @@
 import type { Dialect } from '../toolmap'
-import { splitSegments } from './segments'
+import { splitSegments, splitSegmentsWithSeparators } from './segments'
 import { verifyRewrite } from './verify'
+import { isWrapperRtkInvocation } from './wrappers'
 
 export { splitSegments } from './segments'
 
@@ -12,7 +13,7 @@ export const REWRITE_ASK = 3
 
 /** What one `rtk rewrite` call decided. */
 export type RewriteOutcome =
-  | { readonly kind: 'rewrite'; readonly command: string }
+  | { readonly kind: 'rewrite'; readonly command: string; readonly partial?: boolean }
   | { readonly kind: 'none'; readonly reason: 'no-equivalent' | 'denied' | 'empty' | 'unsafe' | 'guard' }
 
 /** Operators whose appearance in a rewrite that the original lacked is treated as unsafe. */
@@ -86,9 +87,13 @@ function commandBase(word: string): string {
  * @param segment - one operator-delimited segment of a shell command.
  */
 export function isRtkInvocation(segment: string): boolean {
-  const word = firstWord(stripEnvAssignments(segment))
+  const stripped = stripEnvAssignments(segment)
+  const word = firstWord(stripped)
   if (word === '') return false
-  return commandBase(word).toLowerCase() === 'rtk'
+  if (commandBase(word).toLowerCase() === 'rtk') return true
+  // `env FOO=1 rtk …`, `uv run rtk …`, `timeout 30 rtk …` and friends: the
+  // command word is the wrapper, but the binary rtk will run is still rtk.
+  return isWrapperRtkInvocation(stripped)
 }
 
 /**
@@ -151,6 +156,51 @@ export function absolutizeRtk(command: string, binary: string, dialect: Dialect 
 }
 
 /**
+ * Rebuild a proposal segment by segment when the whole-string guard rejects it.
+ *
+ * rtk rewrites every eligible segment of a compound command. A
+ * `command grep … && git status` proposal therefore fails the whole guard on the
+ * `command` segment even though the git segment is a valid prefix rewrite.
+ * Keeping the rejected segment verbatim and the accepted one rewritten
+ * preserves the win without weakening the guard: every accepted segment still
+ * proved equivalent on its own.
+ *
+ * @param original - the command the model asked for.
+ * @param candidate - rtk's proposal, already trimmed.
+ * @returns the assembled command, or `undefined` when the segments cannot be
+ *   aligned or nothing was accepted.
+ */
+function assemblePartialRewrite(
+  original: string,
+  candidate: string,
+): { readonly command: string } | undefined {
+  const from = splitSegmentsWithSeparators(original)
+  const to = splitSegmentsWithSeparators(candidate)
+  if (from.length === 0 || from.length !== to.length) return undefined
+  let accepted = 0
+  const chosen: string[] = []
+  for (let index = 0; index < from.length; index += 1) {
+    const before = from[index]?.text ?? ''
+    const after = to[index]?.text ?? ''
+    if (after === before) {
+      chosen.push(before)
+      continue
+    }
+    if (verifyRewrite(before, after).ok) {
+      chosen.push(after)
+      accepted += 1
+    } else {
+      chosen.push(before)
+    }
+  }
+  if (accepted === 0) return undefined
+  const command = from
+    .map((segment, index) => `${index === 0 ? '' : ` ${segment.opBefore ?? '&&'} `}${chosen[index] ?? segment.text}`)
+    .join('')
+  return { command }
+}
+
+/**
  * Decide whether a `rtk rewrite` result may be executed.
  *
  * The cheap guards exist because the proposed command is data produced by an
@@ -182,8 +232,12 @@ export function decideRewrite(
   if (!hasRtkSegment(candidate)) return { kind: 'none', reason: 'unsafe' }
   if (introducesNewOperators(original, candidate)) return { kind: 'none', reason: 'unsafe' }
   if (candidate.length > Math.max(4096, original.length * 8)) return { kind: 'none', reason: 'unsafe' }
-  if (options.semanticGuard !== false && !verifyRewrite(original, candidate).ok) {
-    return { kind: 'none', reason: 'guard' }
+  if (options.semanticGuard !== false) {
+    if (!verifyRewrite(original, candidate).ok) {
+      const partial = assemblePartialRewrite(original, candidate)
+      if (partial === undefined) return { kind: 'none', reason: 'guard' }
+      return { kind: 'rewrite', command: partial.command, partial: true }
+    }
   }
   return { kind: 'rewrite', command: candidate }
 }
@@ -233,6 +287,16 @@ const BUILTIN_ONLY = new Set([
 ])
 
 /**
+ * Shell keywords that cannot safely receive an rtk insertion.
+ *
+ * `command`/`exec` change how the rest of the line is resolved, and `builtin`
+ * would try to run `rtk` as a shell builtin. rtk still proposes
+ * `command rtk …`, so the guard rejects; skipping the spawn here avoids paying
+ * for an answer that can never be accepted.
+ */
+const SHELL_KEYWORD_PREFIXES = new Set(['command', 'builtin', 'exec'])
+
+/**
  * Cheap pre-filter, mirroring the rule the mature community implementations use:
  * skip only when *every* segment is uninteresting — a shell builtin, an excluded
  * command, or already an rtk call. Anything not provably unroutable is handed to
@@ -255,6 +319,7 @@ export function isWorthRewriting(
     const first = firstWord(stripped)
     if (first === '') return false
     if (BUILTIN_ONLY.has(first)) return false
+    if (SHELL_KEYWORD_PREFIXES.has(first)) return false
     // `rtk rewrite "cat big.log"` yields `rtk read big.log`, which filters nothing
     // for a log *and* makes rtk skip its own posthook for that call — so the one
     // transformation that would have paid off (compression) never runs. Leaving
