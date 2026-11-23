@@ -118,7 +118,18 @@ export async function runRtk(
     readonly cwd?: string
   } = {},
 ): Promise<RtkRun> {
-  const { input = '', timeoutMs = 2000, signal, env = process.env, maxBytes = 8 * 1024 * 1024, cwd } = options
+  const {
+    input = '',
+    timeoutMs = 2000,
+    signal,
+    env: providedEnv = process.env,
+    maxBytes = 8 * 1024 * 1024,
+    cwd,
+  } = options
+  // The plugin owns the rtk it spawns and turns telemetry off by default. Copy
+  // the caller's environment instead of mutating it: `providedEnv` may be
+  // `process.env`, which the host and the user's own shell also use.
+  const env: NodeJS.ProcessEnv = { ...providedEnv, RTK_TELEMETRY_DISABLED: '1' }
   const aborted: RtkRun = {
     code: null,
     stdout: '',
