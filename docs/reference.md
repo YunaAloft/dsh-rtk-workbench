@@ -1,8 +1,8 @@
 # dsh-rtk-workbench 参考手册
 
-> 本文对应 1.2.0；已发布版本以 npm / GitHub tag 为准。
+> 本文对应 1.3.0；已发布版本以 npm / GitHub tag 为准。
 
-适用：DSH `0.2.2-rc.3`（`dshTarget`；兼容线 `0.2.x`）、rtk `1.2.0`、Node `^22.19.0 || >=24`。安装后需要重启 `dsh web`（bundle 变更不是刷新页面）。
+适用：DSH `0.2.2-rc.5`（1.3.0 目标；`dshTarget` 在 release commit 更新；兼容线 `0.2.x`）、rtk `1.2.1`、Node `^22.19.0 || >=24`。安装后需要重启 `dsh web`（bundle 变更不是刷新页面）。
 
 ## 1. 安装与验证
 
@@ -27,16 +27,18 @@ dsh plugin --profile <profile> add dsh-rtk-workbench
 | `/rtk status` | 二进制与来源、探测结果、版本、recall 库状态、pipeline 模式与健康、改写/压缩/说明开关、已打补丁的工具、本会话省量与跳过原因 |
 | `/rtk stats [--json]` | 本会话完整报告：压缩次数、输入/输出字节、耗时、按工具拆分、改写次数与回退、学习到的禁用动词、错误计数 |
 | `/rtk tools` | 工具识别明细：`canonical`（官方名）、`alias`（如 `ops_bash`）、`explicit`（仅被显式列出） |
-| `/rtk explain <命令>` | 为什么这条命令会/不会被改写：本地预过滤（方言、排除表、熔断）+ `rtk hook check` 的正式判定 |
+| `/rtk explain <命令>` | 为什么这条命令会/不会被改写：本地预过滤（方言、排除表、熔断、`command`/`builtin`/`exec` 跳过）+ `rtk hook check` 的正式判定 |
 | `/rtk doctor` | 逐项自检：二进制、`pipeline show/validate/status`、`methods`、`trust`、`hook claude` 往返、recall |
-| `/rtk gain` | 转发 `rtk gain`：rtk 全库统计（不是本会话）；本会话请看 `status` 的 `session` 行 |
+| `/rtk gain` | 转发 `rtk gain`：rtk 全库统计（不是本会话）；本会话请看 `status` 的 `session` 行。插件在输出末尾追加一行口径提示（rtk 1.2.1 的 shadow/headline 已知偏差）；引擎修复 #5111/#5125 后移除 |
 | `/rtk recall <hash>` | 在宿主进程里恢复 rtk 省略的原文；模型 shell 被沙箱隔离时用它 |
 | `/rtk on\|off <rewrite\|compress\|ui>` | 开关；`rewrite`/`compress` 只对本会话生效（`/rtk off compress` 可用来排查另一个结果变换器），`ui` 会写回 profile 配置并**持久**（重启后保持），直到 `/rtk on ui` |
 | `/rtk help [topic]` | 命令列表；`topic` 可取 `pipeline`、`sandbox`、`recovery`、`config` |
 
 输入 `/rtk ` 时宿主的幽灵提示只列短语法 `help · status · on/off <switch>`；完整子命令见上表或 `/rtk help`。
 
-**界面药丸与浮层。** Web GUI 里插件在输入框下方的 composer dock 行里渲染一个药丸（与宿主的 activity/usage 同一排）——`省 12.4k tok · ↓81%`——旁边是压缩与改写次数，守卫计数只在拒绝过之后出现。外观与宿主底栏一致：无边框、无底色，主文案用 `label-secondary`，明细用 `label-tertiary`；分隔符 `·` 两侧各留 6px、颜色用 `separator-primary`，与官方读数一致。药丸开头是一个 14px 图标加状态圆点；空间不足时药丸可被压缩，窄屏按三档收敛：≤767px 隐藏「N 次压缩 · M 次改写」，≤480px 只留「省 X tok」，≤360px 有省量时主文案收起，只留图标与圆点（待命/不可用/已关等状态词保留）。三种颜色：正常、警示（`RTK 不可用` 或注入的 pipeline 回退）、灰色（首次探测初始化、压缩已关，或状态路由始终没有应答）；首次探测较慢时显示 `RTK 初始化中`，重试成功后再转绿。点开是浮层，顺序为「健康 → 本会话 → 累计（跨重启）→ 按工具 → 最近事件 → 诊断 → 反馈与导出」；「健康」区末尾有「查看诊断 ↓」描边按钮，点击滚动到诊断区。诊断区默认折叠为「上次自检 · 时间」（请求失败为「上次自检失败 · 时间」；跨天带日期），点开看全文；运行中按钮显示「正在自检…」并提示通常需要几秒，本次成功或失败后自动展开，关闭浮层再开则默认折叠；按钮为「运行自检 / 清除 / 复制自检文本」，复制文本首行是 `自检于 …`。反馈区是「复制状态 JSON」、用途说明，以及「点击此处可查看如何解读这些数据 →」内联按钮打开的抽屉（自检怎么读 / 状态 JSON 是什么 / 常见失败与下一步；Esc 或点遮罩关闭）。「本会话」底部的跳过原因用中文标签加次数显示（太小 10 次 / 文件搜索 6 次 / 已带压缩标记 / 载荷过大 / 被动工具 / 试压不划算），JSON 与 `/rtk stats` 仍用原始 key。药丸在拿到第一份状态之前不显示，但首次请求失败时会显示灰色 `RTK 状态不可达` 药丸，浮层里带错误信息——这样 fail-closed 的路由是可见的，不会看起来像插件没加载。可用 `uiPill: false` 或 `/rtk off ui` 关掉；后者会写回 profile 配置，重启后仍保持关闭。
+**界面药丸与浮层。** Web GUI 里插件在输入框下方的 composer dock 行里渲染一个药丸（与宿主的 activity/usage 同一排）——`省 12.4k tok · ↓81%`——旁边是压缩与改写次数（改写为 0 时不显示改写），守卫计数只在拒绝过之后出现。外观与宿主底栏一致：无边框、无底色，主文案用 `label-secondary`，明细用 `label-tertiary`；分隔符 `·` 两侧各留 6px、颜色用 `separator-primary`，与官方读数一致。药丸开头是一个 14px 图标加状态圆点；空间不足时药丸可被压缩，窄屏按三档收敛：≤767px 隐藏「N 次压缩 · M 次改写」，≤480px 只留「省 X tok」，≤360px 有省量时主文案收起，只留图标与圆点（待命/不可用/已关等状态词保留）。三种颜色：正常、警示（`RTK 不可用` 或注入的 pipeline 回退）、灰色（首次探测初始化、压缩已关，或状态路由始终没有应答）；首次探测较慢时显示 `RTK 初始化中`，重试成功后再转绿。点开是浮层，顺序为「健康 → 本会话 → 累计（跨重启）→ 按工具 → 最近事件 → 诊断 → 反馈与导出」；「健康」区末尾有「查看诊断 ↓」描边按钮，点击滚动到诊断区。诊断区默认折叠为「上次自检 · 时间」（请求失败为「上次自检失败 · 时间」；跨天带日期），点开看全文；运行中按钮显示「正在自检…」并提示通常需要几秒，本次成功或失败后自动展开，关闭浮层再开则默认折叠；按钮为「运行自检 / 清除 / 复制自检文本」，复制文本首行是 `自检于 …`。反馈区是「复制状态 JSON」、用途说明，以及「点击此处可查看如何解读这些数据 →」内联按钮打开的抽屉（自检怎么读 / 状态 JSON 是什么 / 为什么显示 0 / 很少 / 常见失败与下一步；Esc 或点遮罩关闭）。「本会话」的跳过原因独立成行，用中文标签加次数显示（太小 10 次 / 文件搜索 6 次 / 已带压缩标记 / 载荷过大 / 被动工具 / 试压不划算），JSON 与 `/rtk stats` 仍用原始 key。药丸在拿到第一份状态之前不显示，但首次请求失败时会显示灰色 `RTK 状态不可达` 药丸，浮层里带错误信息——这样 fail-closed 的路由是可见的，不会看起来像插件没加载。可用 `uiPill: false` 或 `/rtk off ui` 关掉；后者会写回 profile 配置，重启后仍保持关闭。
+
+**零压缩与开关。** 只改写、没压缩的会话里，药丸显示「已改写 N 次 / 本会话没有可压缩的输出」；「本会话」显示「压缩 0 次 · 改写 N 次」，并按有压缩 / 只有改写 / 结果太小 / 什么都没有四种状态给出说明，末尾固定说明「省量只统计压缩这一半，改写省下的 token 不计入这里」。设置 `RTK_DISABLED=1` 后，插件不再自动改写（压缩层仍会尝试；手动 `/rtk` 命令不受影响），`/rtk doctor` 会显示 `disabled   : RTK_DISABLED=1 (automatic rewrite skipped)`。插件启动的 rtk 进程默认带 `RTK_TELEMETRY_DISABLED=1`（关闭遥测）；你自己终端里的 rtk 不受影响。
 
 **统计持久化。** 累计与会话统计都写入 `<DSH_HOME>/rtk-workbench/stats.json`（格式 v2）：会话按最后一次活动保留最近 512 个、超过 60 天自动清理；只记计数、工具名与时间，不记命令原文或输出。宿主重启后，同一个会话的药丸会恢复到重启前的压缩与改写数字并继续累加；`statsPersist: off` 时两者都不落盘。
 
@@ -111,14 +113,15 @@ lifetime   : 2 831 compressions, ~1.2M tok saved since 2026-11-05
 
 | 组件 | 版本 |
 |---|---|
-| DeepSeek Harness | `0.2.2-rc.3`（目标；`package.json` 的 `dshTarget`；运行期同版验证） |
-| rtk | `1.2.0`（内置；`dshRtkVersion`） |
+| DeepSeek Harness | `0.2.2-rc.5`（1.3.0 目标；`dshTarget` 在 release commit 更新；运行期同版验证） |
+| rtk | `1.2.1`（内置；`dshRtkVersion`） |
 | Node | `^22.19.0 || >=24` |
 
 **已验证宿主。** 每次发布前新增或刷新一行；证据来自该提交上的门禁与实机冒烟。
 
 | 宿主 | rtk | 验证日期 | 证据 | 说明 |
 |---|---|---|---|---|
+| `0.2.2-rc.5` | `1.2.1` | 2026-11-24 | typecheck + 285 用例 + build + manifest/docs/preview + `verify-host`；`0.2.2-rc.5` / `0.2.2-rc.3` 双基线；Windows x64 测试包 smoke-pack + 用户实机验收 | 1.3.0（test.1，未发布） |
 | `0.2.2-rc.3` | `1.2.0` | 2026-11-15 | typecheck + 256 用例 + build + manifest/docs/preview + `verify-host`；`0.2.2-rc.3` / `0.2.1-rc.5` 双基线；npm 主包与 Windows fat tarball `smoke-pack` | 1.2.0（2026-11-15 发布） |
 | `0.2.2-rc.3` | `1.2.0` | 2026-11-14 | typecheck + 235 用例 + build + manifest/docs + `verify-host`；Windows x64 与 Linux arm64（dsh-go）实机验收 | 1.1.2 |
 | `0.2.2-rc.1` | `1.2.0` | 2026-11-13 | typecheck + 225 用例 + build + manifest/docs + `verify-host`；web profile 验收 | 1.1.1 |
@@ -165,11 +168,11 @@ lifetime   : 2 831 compressions, ~1.2M tok saved since 2026-11-05
 | `dsh-token-saver`（在 `tools/post-execute` 裁剪） | 安全：它的裁剪标记会被识别，本层不再动那段文本 | 不会二次裁剪 |
 | `billion-context`（折叠旧对话、ACP 标记） | 安全：带 ACP 标记的内容直接跳过 | 无需处理 |
 
-**语义守卫。** 执行改写结果前，插件逐段确认它仍在执行原命令：普通前缀（`git status` → `rtk git status`）、`gradle` → `gradlew` 映射、`next build [args]` → `rtk next [args]` 映射（rtk 的 `next` 固定注入 `build` 子命令，所以没有丢参数），或路径与行数都保留的 `read` 映射。任何丢了参数的提案——rtk 1.2.0 会把 `python -m pytest` 变成 `rtk pytest`——会被拒绝，原命令照跑，并在 `/rtk stats` 的 `guard` 计数里体现。`/rtk explain <命令>` 给出判定并说明是哪种映射证明的等价。被拒的改写仍会照常走 post-execute 压缩。
+**语义守卫。** 执行改写结果前，插件逐段确认它仍在执行原命令：普通前缀（`git status` → `rtk git status`）、`gradle` → `gradlew` 映射、`next build [args]` → `rtk next [args]` 映射（rtk 的 `next` 固定注入 `build` 子命令，所以没有丢参数）、路径与行数都保留的 `read` 映射，或透明包装内的 rtk 插入（`env`/`timeout`/`time`/`nohup`/`nice`/`uv run`/`nocorrect`/`noglob`；包装参数与内层命令逐词保留（空白按 shell 语义规范化），`command`/`builtin`/`exec` 永不接受）。复合命令按段组装：守卫拒绝的段保留原文，通过的段用 rtk 形态（`command grep … && git status` → `command grep … && rtk git status`）。任何丢了参数的提案——rtk 1.2.1 仍会把 `python -m pytest` 变成 `rtk pytest`——会被拒绝，原命令照跑，并在 `/rtk stats` 的 `guard` 计数里体现。`/rtk explain <命令>` 给出判定并说明是哪种映射证明的等价。被拒的改写仍会照常走 post-execute 压缩。
 
 **token 口径。** 节省量由压缩发生时的前后文本各自估算：ASCII 稠密字符按每字符 0.25 token，汉字与全角形式按每字符 0.6 token。绝不用字节差反推，因为中英混排没有统一的字节/token 比。所有界面——`/rtk stats`、`--json`、药丸、浮层、基准脚本与 README——读同一个函数；`tests/tokens.test.ts` 钉住公式，`tests/benchmark-tokens.test.ts` 保证基准脚本里的副本同步。它是估算，不是服务商计费口径。
 
-**版本策略。** 平台子包与主包同版本并记录内置 rtk 版本；DSH 升级后按新 tag 重跑兼容检查再发版。rtk 的参考源码用与内置二进制一致的发布 tag（`v1.2.0`），不用 `develop`。
+**版本策略。** 平台子包与主包同版本并记录内置 rtk 版本；DSH 升级后按新 tag 重跑兼容检查再发版。rtk 的参考源码用与内置二进制一致的发布 tag（`v1.2.1`），不用 `develop`。
 
 ## 7. 故障排查
 

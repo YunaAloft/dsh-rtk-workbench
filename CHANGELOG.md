@@ -2,6 +2,23 @@
 
 All notable changes to `dsh-rtk-workbench`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `/rtk gain` appends a note about rtk 1.2.1's known rtk-wide bias (shadow decisions count stderr; the headline caps only input tokens). The note is removed once #5111 and #5125 ship.
+- `/rtk doctor` reports `disabled   : RTK_DISABLED=1 (automatic rewrite skipped)` when the switch is set.
+- The overlay's "this session" block explains zero or low numbers in four states (compressed / rewrites only / too small / nothing yet) and shows skip reasons as their own row. The help drawer gains a "Why it shows 0 / very little" block.
+
+### Changed
+
+- Baseline: bundled rtk `1.2.1`; DSH `0.2.2-rc.5` type baseline and matching dev lockfile.
+- The pill shows `已改写 N 次 / 本会话没有可压缩的输出` when a session rewrote but compressed nothing.
+- The rewrite pre-filter skips `command`/`builtin`/`exec`; the guard accepts transparent `env`/`timeout`/`time`/`nohup`/`nice`/`uv run`/`nocorrect`/`noglob` wrappers and assembles partially accepted compound commands (the `command` segment stays verbatim, the git segment is rewritten).
+- rtk processes spawned by the plugin default to `RTK_TELEMETRY_DISABLED=1` (telemetry off). rtk in the user's own shell is unaffected.
+- `RTK_DISABLED=1` disables automatic rewrites; the compression layer still tries, and manual `/rtk` commands are unaffected.
+- Detail preview images re-rendered (option 3: captions +18px, card bottom +18px, divider and footer +18px; zh/en).
+
 ## [1.2.0] — 2026-11-15
 
 Makes the overlay explain itself, gives the plugin page a real preview image, and stops counting an rtk no-op as a compression. This update also fixes the stale-stylesheet bug from #17 and avoids a false "unusable" flash on a slow first probe.

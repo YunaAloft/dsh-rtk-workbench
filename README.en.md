@@ -22,7 +22,7 @@
 
 ## Why this exists
 
-rtk (Rust Token Killer) sits between the agent and its tools: it rewrites a command into a filtered form and condenses output before the model reads it. It ships adapters for 18 AI tools (as of rtk 1.2.0) — DSH is not one of them — and the community plugins for DSH each cover only part of rewriting or trimming. This plugin closes the loop: **rewrite** (delegated to rtk's rules), **compress** (rtk's own method chain, no reimplementation), **show** (savings land in the counters and are visible in the UI). Every failure path stays open: with rtk missing, slow or answering something unexpected, a tool call behaves exactly as if this plugin were not installed. It registers no new tool, replaces no shell executor and touches no model API.
+rtk (Rust Token Killer) sits between the agent and its tools: it rewrites a command into a filtered form and condenses output before the model reads it. It ships adapters for 18 AI tools (as of rtk 1.2.1) — DSH is not one of them — and the community plugins for DSH each cover only part of rewriting or trimming. This plugin closes the loop: **rewrite** (delegated to rtk's rules), **compress** (rtk's own method chain, no reimplementation), **show** (savings land in the counters and are visible in the UI). Every failure path stays open: with rtk missing, slow or answering something unexpected, a tool call behaves exactly as if this plugin were not installed. It registers no new tool, replaces no shell executor and touches no model API.
 
 ## What you get
 
