@@ -216,10 +216,18 @@ describe('pillText', () => {
     expect(missingText.secondary).toBe('no rtk record for this session yet')
 
     const base = (payload() as { session: Record<string, unknown> }).session
-    const empty = readStatus(payload({ session: { ...base, compressions: 0 } }))
+    const empty = readStatus(payload({ session: { ...base, compressions: 0, rewrites: 0 } }))
     expect(pillText(empty, undefined, translate('en'), 's1').secondary).toBe(
       'no compression recorded for this session yet',
     )
+  })
+
+  it('names rewrites when compression is still zero', () => {
+    const base = (payload() as { session: Record<string, unknown> }).session
+    const rewritten = readStatus(payload({ session: { ...base, compressions: 0, rewrites: 3 } }))
+    const text = pillText(rewritten, undefined, translate('en'), 's1')
+    expect(text.primary).toBe('3 rewrites applied')
+    expect(text.secondary).toBe('no compressible output this session')
   })
 
   it('explains a degraded state instead of showing numbers', () => {
@@ -258,9 +266,12 @@ describe('panelSections', () => {
     expect(session?.rows[1]?.value).toContain('降幅 81%')
     expect(session?.rows[1]?.value).not.toContain('-81')
     expect(session?.rows[2]?.value).toContain('3 次改写')
-    expect(session?.note).toContain('太小 9 次')
-    expect(session?.note).toContain('被动工具 3 次')
-    expect(session?.note).toContain('试压不划算 2 次')
+    const skippedRow = session?.rows.find((row) => row.label === '跳过原因')
+    expect(skippedRow?.value).toContain('太小 9 次')
+    expect(skippedRow?.value).toContain('被动工具 3 次')
+    expect(skippedRow?.value).toContain('试压不划算 2 次')
+    expect(session?.note).toContain('压缩已生效')
+    expect(session?.note).toContain('省量只统计压缩这一半')
     expect(sections[3]?.rows[0]?.label).toBe('bash')
     expect(sections[4]?.rows[0]?.value).toContain('↓90%')
   })
@@ -317,7 +328,7 @@ describe('panelSections', () => {
     expect(keysRow?.value).toBe('与当前会话一致 · s1')
   })
 
-  it('explains a zero saving only when rewrites did work', () => {
+  it('shows rewrites and the right explanation when compression is zero', () => {
     const base = (payload() as { session: Record<string, unknown> }).session
     const zero = {
       ...base,
@@ -326,10 +337,15 @@ describe('panelSections', () => {
       rewrites: 3,
       skipped: { size: 0, scope: 0, marked: 0, payload: 0, ptc: 0, noop: 0 },
     }
-    const note = panelSections(readStatus(payload({ session: zero })), undefined, translate('zh'))[1]?.note
-    expect(note).toContain('省下 0 不代表 RTK 没工作')
+    const section = panelSections(readStatus(payload({ session: zero })), undefined, translate('zh'))[1]
+    expect(section?.rows.find((row) => row.label === '次数')?.value).toBe('压缩 0 次 · 改写 3 次')
+    expect(section?.note).toContain('输出已由改写换成紧凑形态')
+    expect(section?.note).toContain('省量只统计压缩这一半')
+
     const noRewrite = { ...zero, rewrites: 0 }
-    expect(panelSections(readStatus(payload({ session: noRewrite })), undefined, translate('zh'))[1]?.note).toBeUndefined()
+    const empty = panelSections(readStatus(payload({ session: noRewrite })), undefined, translate('zh'))[1]
+    expect(empty?.rows[0]?.label).toBe('本会话还没有压缩记录')
+    expect(empty?.note).toContain('还没有可压缩的输出')
   })
 
   it('masks the stale session and explains the mismatch in the health rows', () => {
@@ -386,5 +402,16 @@ describe('self-check timestamps', () => {
   it('marks a failed self-check request in the collapsed row', () => {
     expect(doctorCollapsedLabel(translate('zh'), at, false, sameDay)).toBe('上次自检 · 12:34:56')
     expect(doctorCollapsedLabel(translate('zh'), at, true, sameDay)).toBe('上次自检失败 · 12:34:56')
+  })
+})
+
+describe('zero-explanation copy', () => {
+  it('ships the drawer block and the measurement note in both languages', () => {
+    expect(dictionaries.zh['panel.helpZeroTitle']).toBe('为什么显示 0 / 很少')
+    expect(dictionaries.en['panel.helpZeroTitle']).toBe('Why it shows 0 / very little')
+    expect(dictionaries.zh['panel.helpZero']).toContain('两条省钱路径')
+    expect(dictionaries.en['panel.helpZero']).toContain('two ways to save')
+    expect(dictionaries.zh['panel.noteScope']).toContain('省量只统计压缩这一半')
+    expect(dictionaries.en['panel.noteScope']).toContain('Savings count only the compression half')
   })
 })

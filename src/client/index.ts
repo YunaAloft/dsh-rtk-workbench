@@ -594,6 +594,7 @@ function createClientPlugin(require: (id: string) => unknown): {
               ),
               helpBlock(t('panel.helpCheckTitle'), t('panel.helpCheck')),
               helpBlock(t('panel.helpJsonTitle'), t('panel.helpJson')),
+              helpBlock(t('panel.helpZeroTitle'), t('panel.helpZero')),
               helpBlock(t('panel.helpFailuresTitle'), t('panel.helpFailures')),
               h('p', { className: 'rtkw-fine' }, t('panel.helpClosing')),
             ]),
