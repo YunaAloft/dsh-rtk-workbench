@@ -209,4 +209,25 @@ describe('/rtk command handler', () => {
     const headlessText = headless.kind === 'success' ? (headless.text ?? '') : ''
     expect(headlessText).toContain('web route  : not mounted (headless profile)')
   })
+
+  it('reports RTK_DISABLED in doctor only when it is set', async () => {
+    const disabled = await makeHandler(baseConfig(), { env: { RTK_DISABLED: '1' } }).handle({
+      rawInput: 'doctor',
+      agent: {},
+    })
+    const disabledText = disabled.kind === 'success' ? (disabled.text ?? '') : ''
+    expect(disabledText).toContain('disabled   : RTK_DISABLED=1 (automatic rewrite skipped)')
+
+    const normal = await makeHandler(baseConfig()).handle({ rawInput: 'doctor', agent: {} })
+    const normalText = normal.kind === 'success' ? (normal.text ?? '') : ''
+    expect(normalText).not.toContain('RTK_DISABLED=1')
+  })
+
+  it('appends the known-bias note to /rtk gain', async () => {
+    const outcome = await makeHandler(baseConfig()).handle({ rawInput: 'gain', agent: {} })
+    const text = outcome.kind === 'success' ? (outcome.text ?? '') : ''
+    expect(text).toContain('ok')
+    expect(text).toContain('rtk 1.2.1 的 rtk-wide 统计有两个已知偏差')
+    expect(text).toContain('以 /rtk status 为准')
+  })
 })

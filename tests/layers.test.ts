@@ -282,4 +282,64 @@ describe('semantic guard in the rewrite layer', () => {
     expect(layer.rewriteCount()).toBe(1)
     layer.dispose()
   })
+
+  it('skips the spawn and the rewrite when RTK_DISABLED=1', async () => {
+    const seen: string[] = []
+    const definition = makeDefinition('bash', async (args: { command: string }) => {
+      seen.push(args.command)
+      return 'ok'
+    })
+    const ctx = fakeCtx(new Map([['bash', definition]]))
+    const run = vi.fn(async () => ({ code: 3, stdout: 'rtk git status', stderr: '' }))
+    const layer = createRewriteLayer({
+      ctx,
+      binary: 'rtk',
+      timeoutMs: 100,
+      env: { RTK_DISABLED: '1' },
+      run: run as never,
+    })
+    layer.ensurePatched('bash', undefined)
+    await invoke(definition, { command: 'git status' })
+    expect(seen).toEqual(['git status'])
+    expect(run).not.toHaveBeenCalled()
+    expect(layer.rewriteCount()).toBe(0)
+    layer.dispose()
+  })
+
+  it('does not spawn rtk for a pure command/builtin/exec segment', async () => {
+    const seen: string[] = []
+    const definition = makeDefinition('bash', async (args: { command: string }) => {
+      seen.push(args.command)
+      return 'ok'
+    })
+    const ctx = fakeCtx(new Map([['bash', definition]]))
+    const run = vi.fn(async () => ({ code: 3, stdout: 'command rtk grep -rn X a', stderr: '' }))
+    const layer = createRewriteLayer({ ctx, binary: 'rtk', timeoutMs: 100, env: {}, run: run as never })
+    layer.ensurePatched('bash', undefined)
+    await invoke(definition, { command: 'command grep -rn X a' })
+    expect(seen).toEqual(['command grep -rn X a'])
+    expect(run).not.toHaveBeenCalled()
+    layer.dispose()
+  })
+
+  it('runs the assembled form of a partially accepted compound command', async () => {
+    const seen: string[] = []
+    const definition = makeDefinition('bash', async (args: { command: string }) => {
+      seen.push(args.command)
+      return 'ok'
+    })
+    const ctx = fakeCtx(new Map([['bash', definition]]))
+    const layer = createRewriteLayer({
+      ctx,
+      binary: 'rtk',
+      timeoutMs: 100,
+      env: {},
+      run: proposalRunner('command rtk grep -rn X a && rtk git status'),
+    })
+    layer.ensurePatched('bash', undefined)
+    await invoke(definition, { command: 'command grep -rn X a && git status' })
+    expect(seen).toEqual(['command grep -rn X a && rtk git status'])
+    expect(layer.rewriteCount()).toBe(1)
+    layer.dispose()
+  })
 })

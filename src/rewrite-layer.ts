@@ -213,6 +213,10 @@ export function createRewriteLayer(options: RewriteLayerOptions) {
     const dialect = dialectOf(name)
     const runner = options.run ?? runRtk
     const wrapped = async (args: unknown, exec: ToolRunContext): Promise<unknown> => {
+      // The official embedding contract makes the host responsible for checking
+      // this before spawning: without it, rtk skips filtering but still rewrites,
+      // which costs a spawn and misreports a rewrite that saved nothing.
+      if (env.RTK_DISABLED === '1') return await original.call(owner, args, exec)
       const command = commandOf(args)
       if (command === undefined || !isWorthRewriting(command, dialect, exclude)) {
         return await original.call(owner, args, exec)

@@ -74,6 +74,10 @@ export interface CommandContext {
 /** Short ghost hint; subcommands must also appear in HELP (tested). */
 export const COMMAND_HINT = 'help · status · on/off <switch>'
 
+/** Appended to `/rtk gain` output; remove once rtk ships #5111 and #5125. */
+const GAIN_CAVEAT =
+  'rtk 1.2.1 的 rtk-wide 统计有两个已知偏差：shadow 规则把 stderr 记成节省；headline 只对输入 token 限幅。本会话数字以 /rtk status 为准。'
+
 export const HELP = [
   'rtk-workbench — /rtk <subcommand>',
   '  status         binary, pipeline, switches, session savings',
@@ -269,6 +273,9 @@ export function createCommandHandler(context: CommandContext) {
     )
     const versionRun = await run(binary, ['--version'], { timeoutMs: budget, env: context.env, maxBytes: 4096 })
     lines.push(`rtk        : ${(versionRun.stdout || versionRun.stderr).trim() || describeRun(versionRun)}`)
+    if (context.env.RTK_DISABLED === '1') {
+      lines.push('disabled   : RTK_DISABLED=1 (automatic rewrite skipped)')
+    }
     const webRoute = context.webRoute?.()
     lines.push(
       webRoute === undefined || !webRoute.mounted
@@ -408,12 +415,13 @@ export function createCommandHandler(context: CommandContext) {
     return { kind: 'success', text: local.join('\n') }
   }
 
-  async function forward(args: readonly string[], label: string): Promise<CommandOutcome> {
+  async function forward(args: readonly string[], label: string, note?: string): Promise<CommandOutcome> {
     const result = await run(binary, [...args], { timeoutMs: Math.max(context.timeoutMs, 5000), env: context.env })
     if (result.failure !== undefined) return { kind: 'error', text: `${label}: rtk did not run (${describeRun(result)})` }
     const text = (result.stdout + result.stderr).trim()
     if (result.code !== 0 && text === '') return { kind: 'error', text: `${label}: exit ${String(result.code)}` }
-    return { kind: 'success', text: text === '' ? `${label}: (no output)` : text }
+    const body = text === '' ? `${label}: (no output)` : text
+    return { kind: 'success', text: note === undefined ? body : `${body}\n${note}` }
   }
 
   /**
@@ -443,7 +451,7 @@ export function createCommandHandler(context: CommandContext) {
       case 'doctor':
         return await doctor()
       case 'gain':
-        return await forward(['gain'], 'rtk gain')
+        return await forward(['gain'], 'rtk gain', GAIN_CAVEAT)
       case 'recall':
         if (rest.length === 0) return { kind: 'error', text: 'usage: /rtk recall <hash>' }
         return await forward(['recall', rest[0] ?? ''], 'rtk recall')
