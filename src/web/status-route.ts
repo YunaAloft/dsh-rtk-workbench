@@ -119,7 +119,7 @@ export function buildStatusPayload(sources: StatusSources, now: number = Date.no
 }
 
 /** Minimal structural view of a `node:http` request/response pair. */
-type Handler = (request: IncomingMessage, response: ServerResponse) => Promise<void>
+type Handler = (request: IncomingMessage, response: ServerResponse, peer?: unknown) => Promise<void>
 
 /** Structural view of the host's webserver service (see `packages/host/webserver`). */
 export interface WebServerLike {
@@ -151,12 +151,16 @@ export interface MountOptions {
   /**
    * Admission fence applied to every request (including OPTIONS) before any
    * route logic: return `undefined` to allow, or the HTTP status to answer.
-   * The host's `client-connection` service exposes exactly this shape as
-   * `requestRejection` (Host/Origin fence + signed browser cookie). When no
-   * `admit` is given the route is fail-closed: every request is answered 401,
-   * because the payload is only meaningful to the authenticated local UI.
+   *
+   * The `peer` argument is the one the host passes to the route handler, and it
+   * exists only after the host's own `webserver/authorize` admitted the request
+   * (this route registers with the default `'required'` policy). A Peer is
+   * therefore proof of admission, and the fence is consulted only without one.
+   *
+   * When no `admit` is given the route is fail-closed: every request is answered
+   * 401, because the payload is only meaningful to the authenticated local UI.
    */
-  readonly admit?: (request: IncomingMessage) => number | undefined
+  readonly admit?: (request: IncomingMessage, peer?: unknown) => number | undefined
   /** Called once the route is registered with a live webserver. */
   readonly onMounted?: () => void
   readonly log?: (message: string) => void
@@ -182,28 +186,61 @@ const MAX_DOCTOR_BODY = 4 * 1024
 /** A session id is a lookup key, never a path: bound it before trusting it. */
 const MAX_SESSION_KEY_LENGTH = 128
 
+/** One admission answer from the host's `client-connection` service (DSH ≥ 0.2.2-rc.2). */
+export interface ConnectionAdmission {
+  /** Present when the request is admitted. */
+  readonly peer?: unknown
+  /** HTTP status to answer with when it is not. */
+  readonly rejection?: number
+}
+
 /** The slice of the host's `client-connection` service used for admission. */
 export interface ConnectionFence {
-  requestRejection(request: IncomingMessage): number | undefined
+  /** Pre-0.2.2-rc.2 fence (Host/Origin + signed cookie); removed upstream. */
+  requestRejection?(request: IncomingMessage): number | undefined
+  /** Current fence; it replaced `requestRejection`. */
+  admit?(request: IncomingMessage): ConnectionAdmission | undefined
 }
 
 /**
  * Build an admission fence that resolves the connection service per request.
  *
+ * The host admits the request before this handler runs and passes the admitted
+ * Peer, so a Peer short-circuits the fence: that decision is authoritative and
+ * the probe below only covers a peer-less call.
+ *
  * `client-connection` provides its service only after its asynchronous browser
  * auth store is ready. Reading the service once during `apply` can therefore
  * capture `undefined` and leave the route permanently fail-closed. Resolving it
- * at request time also keeps `requestRejection`'s `this` bound to the service;
- * extracting the method first makes it throw once the service does appear.
+ * at request time also keeps the fence's `this` bound to the service; extracting
+ * the method first makes it throw once the service does appear.
+ *
+ * On DSH ≥ 0.2.2-rc.2 `admit` reads `connection.authentication`, which Cordis
+ * refuses to resolve from a scope that did not inject it (“cannot get property
+ * … without inject”). That throw used to escape the handler and become a
+ * bodyless 400, so it is contained here: `onFenceError` reports it once and the
+ * answer stays closed.
  *
  * @param getConnection - the current connection service, if the host has one.
+ * @param onFenceError - reports a fence that could not run at all.
  */
 export function createConnectionAdmission(
   getConnection: () => ConnectionFence | undefined,
-): (request: IncomingMessage) => number | undefined {
-  return (request) => {
+  onFenceError?: (error: unknown) => void,
+): (request: IncomingMessage, peer?: unknown) => number | undefined {
+  return (request, peer) => {
+    if (peer !== undefined) return undefined
     const connection = getConnection()
-    return connection === undefined ? 401 : connection.requestRejection(request)
+    if (connection === undefined) return 401
+    try {
+      if (typeof connection.requestRejection === 'function') return connection.requestRejection(request)
+      if (typeof connection.admit !== 'function') return 401
+      const answer = connection.admit(request)
+      return answer !== undefined && typeof answer.rejection === 'number' ? answer.rejection : undefined
+    } catch (error) {
+      onFenceError?.(error)
+      return 401
+    }
   }
 }
 
@@ -216,16 +253,16 @@ export function createConnectionAdmission(
 export function createStatusHandler(options: MountOptions): Handler {
   const prefix = (options.path ?? STATUS_ROUTE_PATH).replace(/\/+$/, '')
   const admit = options.admit ?? (() => 401)
-  return async (request, response) => {
-    const rejection = admit(request)
-    if (rejection !== undefined) {
-      send(response, rejection, { ok: false, error: rejection === 401 ? 'unauthorized' : 'forbidden' })
-      return
-    }
-    const url = new URL(request.url ?? '/', 'http://localhost')
-    const route = url.pathname.slice(prefix.length).replace(/\/+$/, '') || '/'
-    const method = (request.method ?? 'GET').toUpperCase()
+  return async (request, response, peer) => {
     try {
+      const rejection = admit(request, peer)
+      if (rejection !== undefined) {
+        send(response, rejection, { ok: false, error: rejection === 401 ? 'unauthorized' : 'forbidden' })
+        return
+      }
+      const url = new URL(request.url ?? '/', 'http://localhost')
+      const route = url.pathname.slice(prefix.length).replace(/\/+$/, '') || '/'
+      const method = (request.method ?? 'GET').toUpperCase()
       if (method === 'GET' && route === '/status') {
         const requested = url.searchParams.get('session')
         const sessionKey =
@@ -253,6 +290,12 @@ export function createStatusHandler(options: MountOptions): Handler {
       }
       send(response, 404, { ok: false, error: `${method} ${route} is not served` })
     } catch (error) {
+      // A throw here used to reject the dispatch, and the host answers a rejected
+      // dispatch with a bodyless 400 — answer with the reason instead.
+      if (response.headersSent) {
+        response.destroy()
+        return
+      }
       send(response, 500, { ok: false, error: error instanceof Error ? error.message : String(error) })
     }
   }

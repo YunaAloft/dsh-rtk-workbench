@@ -121,6 +121,59 @@ describe('status route', () => {
     )
     expect(state.status).toBe(200)
   })
+  it('forwards the host Peer to the admission fence', async () => {
+    const seen: unknown[] = []
+    const { response, state } = recorder()
+    await handler({
+      admit: (_request, peer) => {
+        seen.push(peer)
+        return undefined
+      },
+    })(request(`${STATUS_ROUTE_PATH}/status`), response, { kind: 'owner' } as never)
+    expect(state.status).toBe(200)
+    expect(seen).toEqual([{ kind: 'owner' }])
+  })
+
+  it('serves a Peer-admitted request even when the connection fence would deny it', async () => {
+    const { response, state } = recorder()
+    await handler({ admit: createConnectionAdmission(() => ({ requestRejection: () => 403 })) })(
+      request(`${STATUS_ROUTE_PATH}/status`),
+      response,
+      { peer: {} } as never,
+    )
+    expect(state.status).toBe(200)
+  })
+
+  it('serves a Peer-admitted request when the fence cannot run at all (DSH 0.2.3)', async () => {
+    // The exact reported failure: `admit()` reads `connection.authentication`, which Cordis
+    // refuses from this scope. With a Peer the fence must not be consulted, so the route works.
+    const reported: unknown[] = []
+    const fence = () => ({
+      admit(): never {
+        throw new Error('cannot get property "connection.authentication" without inject')
+      },
+    })
+    const { response, state } = recorder()
+    await handler({ admit: createConnectionAdmission(fence, (error) => reported.push(error)) })(
+      request(`${STATUS_ROUTE_PATH}/status`),
+      response,
+      { peer: {} } as never,
+    )
+    expect(state.status).toBe(200)
+    expect(reported).toHaveLength(0)
+  })
+
+  it('answers a throwing fence instead of rejecting the dispatch', async () => {
+    const { response, state } = recorder()
+    await handler({
+      admit: () => {
+        throw new Error('cannot get property "connection.authentication" without inject')
+      },
+    })(request(`${STATUS_ROUTE_PATH}/status`), response)
+    // Rejecting here is what the host turns into a bodyless 400; the reason must survive.
+    expect(state.status).toBe(500)
+    expect((JSON.parse(state.body) as { error: string }).error).toContain('without inject')
+  })
 })
 
 describe('admission fence', () => {
@@ -166,6 +219,42 @@ describe('createConnectionAdmission', () => {
     const admit = createConnectionAdmission(() => connection)
     expect(admit(request as never)).toBeUndefined()
     expect(seen).toBe(request)
+  })
+  it('lets an admitted Peer through without consulting the fence at all', () => {
+    let calls = 0
+    const connection = {
+      requestRejection(): number | undefined {
+        calls += 1
+        return 403
+      },
+    }
+    const admit = createConnectionAdmission(() => connection)
+    expect(admit({} as never, { peer: {} })).toBeUndefined()
+    expect(calls).toBe(0)
+  })
+
+  it('reads admit() when the host no longer exposes requestRejection', () => {
+    expect(createConnectionAdmission(() => ({ admit: () => ({ rejection: 403 }) }))({} as never)).toBe(403)
+    expect(createConnectionAdmission(() => ({ admit: () => ({ peer: {} }) }))({} as never)).toBeUndefined()
+  })
+
+  it('stays closed and reports a fence that cannot run in this scope', () => {
+    const errors: unknown[] = []
+    const connection = {
+      admit(): never {
+        throw new Error('cannot get property "connection.authentication" without inject')
+      },
+    }
+    const admit = createConnectionAdmission(
+      () => connection,
+      (error) => errors.push(error),
+    )
+    expect(admit({} as never)).toBe(401)
+    expect(errors).toHaveLength(1)
+  })
+
+  it('is fail-closed for a service exposing neither fence', () => {
+    expect(createConnectionAdmission(() => ({}))({} as never)).toBe(401)
   })
 })
 
