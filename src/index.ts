@@ -544,12 +544,23 @@ export function apply(ctx: Context, rawConfig: ConfigShape): void {
   // The web UI reads this route; a headless profile has no webserver, so the
   // service simply never appears there.
   //
-  // Admission reuses the host's client-connection fence (Host/Origin checks +
-  // the signed browser cookie) instead of inventing a plugin token. Without
-  // that service the route is fail-closed: the payload is only meaningful to
-  // the authenticated local UI, and a missing fence is a composition problem
-  // the doctor output should surface rather than silently serve around.
-  const admit = createConnectionAdmission(() => connection)
+  // Admission takes the decision the host already made: it runs
+  // `webserver/authorize` for this route (registered with the default `required`
+  // policy) and passes the admitted Peer to the handler, so a Peer is proof of
+  // admission and the fence is only a fallback for a peer-less call. The fence
+  // itself is the host's client-connection service (Host/Origin checks + the
+  // signed browser cookie) rather than a plugin token; without that service, or
+  // without a Peer, the route stays fail-closed because the payload is only
+  // meaningful to the authenticated local UI.
+  const admit = createConnectionAdmission(
+    () => connection,
+    (error) =>
+      logger.warn?.(
+        `[rtk-workbench] admission fence unavailable from this scope: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      ),
+  )
   let routeMounted = false
   mountStatusRoute(ctx as Context & InjectingContext, {
     sources: {
