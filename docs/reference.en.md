@@ -1,6 +1,6 @@
 # dsh-rtk-workbench reference
 
-> This document covers 1.3.0; the published version is whatever npm / the GitHub tag says.
+> This document covers 1.3.1; the published version is whatever npm / the GitHub tag says.
 
 Applies to DSH `0.2.2-rc.5` (`dshTarget`; the `0.2.x` line is compatible), rtk `1.2.1`, Node `^22.19.0 || >=24`. Restart `dsh web` after installing — a bundle change is not a page refresh.
 
@@ -121,6 +121,8 @@ Every key can be overridden from `cordis.patch.yml`; values are validated at loa
 
 | Host | rtk | Checked | Evidence | Notes |
 |---|---|---|---|---|
+| `0.2.2-rc.5` | `1.2.1` | 2026-11-27 | typecheck + 293 tests + build + manifest 46/docs 14/preview + `verify-host`; local tarball smoke: authenticated `200` JSON, unauthenticated `401` JSON, `OPTIONS 204` | 1.3.1 (released 2026-11-27) |
+| `0.2.3-alpha.2` | `1.2.1` | 2026-11-27 | upstream source check (alpha.1 removed `requestRejection`, handler gained the Peer argument); local L2 B-step: 1.3.1 tarball answered `200` JSON with a cookie and `204` for `OPTIONS`; an unauthenticated call is a host `401 plain`; not a full machine acceptance | 1.3.1; alpha.3+ unverified |
 | `0.2.2-rc.5` | `1.2.1` | 2026-11-24 | typecheck + 285 tests + build + manifest/docs/preview + `verify-host`; `0.2.2-rc.5` / `0.2.2-rc.3` dual baseline; Windows x64 test tarball smoke-pack + user acceptance | 1.3.0 (released 2026-11-24) |
 | `0.2.2-rc.3` | `1.2.0` | 2026-11-15 | typecheck + 256 tests + build + manifest/docs/preview + `verify-host`; `0.2.2-rc.3` / `0.2.1-rc.5` dual baseline; npm main and Windows fat tarball `smoke-pack` | 1.2.0 (released 2026-11-15) |
 | `0.2.2-rc.3` | `1.2.0` | 2026-11-14 | typecheck + 235 tests + build + manifest/docs + `verify-host`; Windows x64 and Linux arm64 (dsh-go) acceptance | 1.1.2 |
