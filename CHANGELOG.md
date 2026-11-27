@@ -2,11 +2,11 @@
 
 All notable changes to `dsh-rtk-workbench`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.3.1] — 2026-11-27
 
 ### Fixed
 
-- `/api/rtk-workbench` answers again on DSH ≥ 0.2.2-rc.5: admission now takes the Peer the host already admitted instead of re-running a fence that needs `connection.authentication` (which throws `cannot get property … without inject` from this plugin's scope), and a throw anywhere in the handler answers a readable `500` instead of rejecting the dispatch into a bodyless `400` (#22).
+- `/api/rtk-workbench` answers again on DSH 0.2.3-alpha.1 and later (where `requestRejection` was removed): admission now takes the Peer the host already admitted instead of re-running a fence that needs `connection.authentication` (which throws `cannot get property … without inject` from this plugin's scope), and a throw anywhere in the handler answers a readable `500` instead of rejecting the dispatch into a bodyless `400` (#22).
 
 ## [1.3.0] — 2026-11-24
 
